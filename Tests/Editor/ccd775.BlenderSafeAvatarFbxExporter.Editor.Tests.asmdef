@@ -1,0 +1,24 @@
+{
+  "name": "ccd775.BlenderSafeAvatarFbxExporter.Editor.Tests",
+  "rootNamespace": "ccd775.AvatarFbxExporter.Tests",
+  "references": [
+    "ccd775.BlenderSafeAvatarFbxExporter.Editor",
+    "Autodesk.Fbx"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

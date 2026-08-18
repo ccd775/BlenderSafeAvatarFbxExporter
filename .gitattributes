@@ -1,0 +1,12 @@
+* text=auto eol=lf
+*.cs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.meta text eol=lf
+*.fbx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.psd binary

@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a focused improvement to the exporter
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What current workflow limitation are you trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: How should it be validated?
+      description: Include expected Unity and Blender versions and a license-safe test strategy.
+    validations:
+      required: true

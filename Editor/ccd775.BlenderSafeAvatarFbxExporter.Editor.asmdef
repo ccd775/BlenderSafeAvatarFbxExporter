@@ -1,0 +1,19 @@
+{
+  "name": "ccd775.BlenderSafeAvatarFbxExporter.Editor",
+  "rootNamespace": "ccd775.AvatarFbxExporter",
+  "references": [
+    "Unity.Formats.Fbx.Editor",
+    "Autodesk.Fbx"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

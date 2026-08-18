@@ -1,0 +1,74 @@
+name: Source validation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate repository contents
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          root = Path('.')
+          required = [
+              'README.md',
+              'README.zh-CN.md',
+              'LICENSE.md',
+              'Third Party Notices.md',
+              'CHANGELOG.md',
+              'CONTRIBUTING.md',
+              'Editor/ccd775.BlenderSafeAvatarFbxExporter.Editor.asmdef',
+              'Tests/Editor/ccd775.BlenderSafeAvatarFbxExporter.Editor.Tests.asmdef',
+          ]
+          missing = [path for path in required if not (root / path).is_file()]
+          if missing:
+              raise SystemExit(f'Missing required files: {missing}')
+
+          for asmdef_path in root.rglob('*.asmdef'):
+              json.loads(asmdef_path.read_text(encoding='utf-8'))
+
+          forbidden_terms = ('Chiffon.AvatarTools', 'DroyLouo.AvatarFbxExporter', 'Library/Locus')
+          text_suffixes = {'.cs', '.json', '.md', '.yml', '.yaml'}
+          violations = []
+          for path in root.rglob('*'):
+              if path == Path('.github/workflows/source-validation.yml'):
+                  continue
+              if not path.is_file() or path.suffix.lower() not in text_suffixes:
+                  continue
+              text = path.read_text(encoding='utf-8')
+              for term in forbidden_terms:
+                  if term in text:
+                      violations.append(f'{path}: {term}')
+          if violations:
+              raise SystemExit('Project-specific references found:\n' + '\n'.join(violations))
+
+          forbidden_extensions = {'.unity', '.prefab', '.fbx', '.blend', '.vrm'}
+          leaked_assets = [
+              str(path)
+              for path in root.rglob('*')
+              if '.git' not in path.parts and path.is_file() and path.suffix.lower() in forbidden_extensions
+          ]
+          if leaked_assets:
+              raise SystemExit('Avatar or generated binary assets must not be committed: ' + repr(leaked_assets))
+
+          large_files = [
+              str(path)
+              for path in root.rglob('*')
+              if '.git' not in path.parts and path.is_file() and path.stat().st_size > 2 * 1024 * 1024
+          ]
+          if large_files:
+              raise SystemExit('Unexpected files larger than 2 MiB: ' + repr(large_files))
+
+          print('Repository source validation passed.')

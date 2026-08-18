@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a reproducible export or Blender import problem
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not upload paid/private avatar assets unless you have explicit redistribution permission. Prefer a generated or minimal reproduction.
+  - type: input
+    id: unity
+    attributes:
+      label: Unity version
+      placeholder: 2022.3.22f1
+    validations:
+      required: true
+  - type: input
+    id: fbx
+    attributes:
+      label: Unity FBX Exporter version
+      placeholder: 4.2.1
+    validations:
+      required: true
+  - type: input
+    id: blender
+    attributes:
+      label: Blender version
+      placeholder: 4.2.23 LTS
+    validations:
+      required: true
+  - type: textarea
+    id: input
+    attributes:
+      label: Input hierarchy
+      description: Describe the Manual Bake root, mesh count, BlendShape count, and any manual pose edits.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and complete error
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Export result statistics
+      description: Include mesh, vertex, BlendShape, texture, culling, and maximum-error values from the completion dialog when available.
