@@ -1,6 +1,6 @@
 # Material and texture mapping
 
-The exporter does not reproduce Unity shader code in Blender. It preserves source information and maps a useful subset to standard FBX material properties.
+The exporter does not reproduce Unity shader code in Blender. It preserves source information and maps a useful subset to standard FBX material properties. This includes common VRChat avatar workflows that use shaders such as lilToon, but it is not a shader converter.
 
 ## Standard channels
 

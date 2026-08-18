@@ -26,8 +26,11 @@ Autodesk and FBX are registered trademarks or trademarks of Autodesk, Inc., and/
 
 ## Optional workflow software
 
-The tool can consume output produced by Modular Avatar and NDMF, and its output is intended for Blender. None of those projects is copied into this repository, and none is a compile-time dependency of this source code.
+The tool is intended primarily for VRChat avatar authoring workflows and can consume output produced by Modular Avatar and NDMF; its output is intended for Blender. None of these projects is copied into this repository, and none is a compile-time dependency of this source code.
 
+- VRChat: <https://hello.vrchat.com/>
 - Modular Avatar: <https://modular-avatar.nadena.dev/>
 - NDMF: <https://ndmf.nadena.dev/>
 - Blender: <https://www.blender.org/>
+
+This is an independent community project and is not affiliated with or endorsed by VRChat Inc. VRChat is a trademark of VRChat Inc.

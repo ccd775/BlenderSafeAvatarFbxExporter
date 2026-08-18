@@ -23,7 +23,7 @@ No private avatar data is part of the public test suite.
 
 ## Development production regression
 
-The exporter was also exercised against private, non-redistributable Manual Bake fixtures during development. Those assets are not included in this repository.
+The exporter was also exercised against private, non-redistributable VRChat avatar Manual Bake fixtures during development. Those assets are not included in this repository.
 
 One high-complexity fixture produced:
 

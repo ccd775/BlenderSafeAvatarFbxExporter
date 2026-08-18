@@ -28,4 +28,4 @@ Do not submit paid, private, or redistributability-unclear avatar assets. Prefer
 
 ## Scope
 
-Keep the exporter focused on final baked skinned-avatar hierarchies. Optional integrations with Modular Avatar, NDMF, VRChat SDK, or shader packages should remain isolated so the core Editor assembly does not acquire those compile-time dependencies.
+Keep the exporter focused on final baked VRChat avatar and general skinned-avatar hierarchies. Optional integrations with Modular Avatar, NDMF, VRChat SDK, or shader packages should remain isolated so the core Editor assembly does not acquire those compile-time dependencies.

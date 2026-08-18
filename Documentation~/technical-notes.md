@@ -2,7 +2,7 @@
 
 ## Why a normal FBX export is not sufficient
 
-A Modular Avatar Manual Bake result can combine meshes that were authored against different skeleton rest poses. Unity can preserve this by storing a separate bind-pose array on each Mesh. Blender requires one edit-bone rest matrix per Armature bone, so a direct export may import with shifted meshes, giant helper bones, or incorrect deformation.
+A VRChat avatar assembled with Modular Avatar Manual Bake can combine meshes that were authored against different skeleton rest poses. Unity can preserve this by storing a separate bind-pose array on each Mesh. Blender requires one edit-bone rest matrix per Armature bone, so a direct Unity-to-Blender FBX export may import with shifted meshes, giant helper bones, or incorrect deformation.
 
 The exporter creates a temporary clone, evaluates the current visible pose, bakes every skinned mesh into avatar-root space, and rebuilds one consistent set of bind poses. The current bone transforms therefore become the exported rest pose.
 

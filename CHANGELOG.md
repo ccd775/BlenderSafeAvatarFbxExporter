@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Documentation
+
+- Clarified that the exporter is designed for VRChat avatar authoring workflows.
+- Improved GitHub discovery metadata and Unity-to-Blender search terminology.
+
 ## [0.1.0] - 2026-08-18
 
 ### Added

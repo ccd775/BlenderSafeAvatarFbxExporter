@@ -1,6 +1,6 @@
-# Blender-Safe Avatar FBX Exporter
+# Blender-Safe VRChat Avatar FBX Exporter
 
-![从 Unity Modular Avatar Manual Bake 结果导出并在 Blender 中打开](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.1.0/Documentation~/images/blender-safe-export-overview.png)
+![将 Unity 中 Modular Avatar Manual Bake 后的 VRChat 角色导出为 FBX 并在 Blender 中打开](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.1.0/Documentation~/images/blender-safe-export-overview.png)
 
 [![Source validation](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml/badge.svg)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml)
 [![Latest release](https://img.shields.io/github/v/release/ccd775/BlenderSafeAvatarFbxExporter?label=Release)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/latest)
@@ -9,9 +9,17 @@
 
 [English README](README.en.md)
 
-这是一个 Unity Editor 工具，用于把 **Modular Avatar Manual Bake 后的 Avatar/Prefab 实例**导出为 Blender 兼容的 FBX，并保留用户在烘焙结果上手动调整的状态。
+这是一个面向 **VRChat 角色创作者**的 Unity Editor FBX 导出工具。它会把经由 **Modular Avatar Manual Bake** 合并后的 VRChat Avatar / Prefab 导出为 Blender 兼容 FBX，并保留用户在烘焙结果上手动调整的骨骼姿势、BlendShape、蒙皮权重与贴图。
 
-它主要解决以下问题：Manual Bake 结果在 Unity 中显示正常，但多个蒙皮网格可能依赖互相冲突的 bind pose、缩放补偿骨、重合控制点或特殊 FBX 节点结构，直接导出后在 Blender 中会出现骨骼飞远、网格偏移、BlendShape 丢失或形变损坏。
+它适用于需要把 VRChat Avatar 从 Unity 带回 Blender 继续编辑，或将 Modular Avatar 合并结果导出为 FBX 的工作流。Manual Bake 结果在 Unity 中可能显示正常，但多个蒙皮网格会依赖互相冲突的 bind pose、缩放补偿骨、重合控制点或特殊 FBX 节点结构，直接导出后便可能在 Blender 中出现骨骼飞远、网格偏移、BlendShape 丢失或形变损坏。
+
+## 适用工作流
+
+- 在 Unity 中使用 Modular Avatar 组合 VRChat 角色、服装、头发与配件。
+- 对 Manual Bake 结果手动调整骨骼姿势或 BlendShape 后再导出。
+- 需要在 Blender 中继续编辑合并后的角色，同时保留可编辑骨架、蒙皮权重和形态键。
+
+> 本项目是面向 VRChat 创作者的非官方社区工具，与 VRChat Inc. 无隶属或官方关联。它不会上传 Avatar，也不调用 VRChat API。
 
 ## 配套 FBX 后处理工具（开发中）
 

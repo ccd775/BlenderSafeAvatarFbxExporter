@@ -1,6 +1,6 @@
-# Blender-Safe Avatar FBX Exporter
+# Blender-Safe VRChat Avatar FBX Exporter
 
-![A Modular Avatar Manual Bake result exported from Unity and opened in Blender](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.1.0/Documentation~/images/blender-safe-export-overview.png)
+![A VRChat avatar exported from a Modular Avatar Manual Bake result in Unity and opened in Blender](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.1.0/Documentation~/images/blender-safe-export-overview.png)
 
 [![Source validation](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml/badge.svg)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml)
 [![Latest release](https://img.shields.io/github/v/release/ccd775/BlenderSafeAvatarFbxExporter?label=Release)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/latest)
@@ -9,9 +9,17 @@
 
 [简体中文（默认）](README.md)
 
-An Editor-only Unity tool that exports a **Modular Avatar Manual Bake result** to a Blender-compatible FBX while preserving the avatar's current edited state.
+An Editor-only Unity FBX exporter for **VRChat avatar creators**. It exports a VRChat Avatar/Prefab produced by **Modular Avatar Manual Bake** to a Blender-compatible FBX while preserving manually edited bone poses, BlendShapes, skin weights, and textures.
 
-The exporter is designed for baked avatar hierarchies that look correct in Unity but import incorrectly into Blender because different skinned meshes use compensated bind poses, scaled helper bones, duplicated control points, or FBX node layouts that Blender cannot represent directly.
+It is intended for Unity-to-Blender VRChat avatar workflows and for exporting a merged Modular Avatar result to FBX. A Manual Bake result can look correct in Unity while relying on conflicting bind poses, scale-compensated bones, duplicate control points, or FBX node layouts that Blender cannot represent directly, causing displaced bones, shifted meshes, missing BlendShapes, or corrupted deformation after a regular export.
+
+## Intended workflow
+
+- Assemble a VRChat avatar, outfits, hair, and accessories with Modular Avatar in Unity.
+- Manually adjust bones or BlendShape values on the Manual Bake result before export.
+- Continue editing the merged avatar in Blender while retaining an editable armature, skin weights, and shape keys.
+
+> This is an unofficial community tool for VRChat creators and is not affiliated with or endorsed by VRChat Inc. It does not upload avatars or call the VRChat API.
 
 ## Companion FBX post-processing tool (in development)
 
