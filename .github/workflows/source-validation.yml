@@ -24,11 +24,12 @@ jobs:
           root = Path('.')
           required = [
               'README.md',
-              'README.zh-CN.md',
+              'README.en.md',
               'LICENSE.md',
               'Third Party Notices.md',
               'CHANGELOG.md',
               'CONTRIBUTING.md',
+              'Documentation~/images/blender-safe-export-overview.png',
               'Editor/ccd775.BlenderSafeAvatarFbxExporter.Editor.asmdef',
               'Tests/Editor/ccd775.BlenderSafeAvatarFbxExporter.Editor.Tests.asmdef',
           ]

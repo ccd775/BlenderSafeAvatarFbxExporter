@@ -1,93 +1,93 @@
 # Blender-Safe Avatar FBX Exporter
 
+![从 Unity Modular Avatar Manual Bake 结果导出并在 Blender 中打开](Documentation~/images/blender-safe-export-overview.png)
+
 [![Source validation](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml/badge.svg)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 [![Unity 2022.3 LTS](https://img.shields.io/badge/Unity-2022.3%20LTS-black.svg)](https://unity.com/releases/editor/whats-new/2022.3.22)
 
-[中文说明](README.zh-CN.md)
+[English README](README.en.md)
 
-An Editor-only Unity tool that exports a **Modular Avatar Manual Bake result** to a Blender-compatible FBX while preserving the avatar's current edited state.
+这是一个 Unity Editor 工具，用于把 **Modular Avatar Manual Bake 后的 Avatar/Prefab 实例**导出为 Blender 兼容的 FBX，并保留用户在烘焙结果上手动调整的状态。
 
-The exporter is designed for baked avatar hierarchies that look correct in Unity but import incorrectly into Blender because different skinned meshes use compensated bind poses, scaled helper bones, duplicated control points, or FBX node layouts that Blender cannot represent directly.
+它主要解决以下问题：Manual Bake 结果在 Unity 中显示正常，但多个蒙皮网格可能依赖互相冲突的 bind pose、缩放补偿骨、重合控制点或特殊 FBX 节点结构，直接导出后在 Blender 中会出现骨骼飞远、网格偏移、BlendShape 丢失或形变损坏。
 
-## Features
+## 配套 FBX 后处理工具（开发中）
 
-- Bakes the current bone transforms into a unified Blender rest pose.
-- Preserves skin weights and an editable armature.
-- Preserves single-frame BlendShape channels, frame deltas, and current nonzero weights.
-- Preserves manually adjusted bone transforms and BlendShape values from the selected Manual Bake result.
-- Normalizes scale-compensated bone hierarchies while preserving the visible pose.
-- Embeds material textures into the FBX.
-- Maps common diffuse, normal, emission, alpha, metallic, and smoothness semantics to standard FBX material properties.
-- Preserves every Unity material texture binding as `UnityTexture_<property>` metadata, including non-standard shader properties.
-- Handles generated `Texture2D`/`RenderTexture` values and textures located under `Packages/`.
-- Handles NDMF NaNimation deletion bones by culling affected primitives instead of turning hidden geometry visible again.
-- Works around Unity FBX Exporter 4.2.1 control-point merging that can silently corrupt BlendShapes.
-- Separates a `SkinnedMeshRenderer` from its host bone when FBX's single-node-attribute rule would otherwise discard the mesh.
-- Reopens and validates the saved FBX before replacing the requested output.
-- Uses transactional replacement so an existing FBX is not overwritten until the new file has passed validation.
-- Modifies only a temporary inactive clone; the selected avatar and its assets are not changed.
+我们还在开发一个面向导出后 FBX 的独立优化仓库，计划用于**合并与整理骨架及蒙皮权重、优化 UV 空间占用**等。本仓库专注于从 Unity 安全导出，进一步的模型优化将由该配套工具完成。
 
-## Requirements
+**仓库地址：** *开发中，发布后将在此处补充链接。*
 
-The initial release is intentionally pinned to the versions used by its FBX SDK compatibility adapter:
+## 已包含的功能
 
-- Unity **2022.3 LTS** (verified with 2022.3.22f1)
-- Unity FBX Exporter package `com.unity.formats.fbx` **4.2.1**
-- Autodesk FBX SDK package `com.autodesk.fbx` **4.2.1** (installed transitively by FBX Exporter 4.2.1)
-- Blender **4.2 LTS** recommended (verified with Blender 4.2.23)
-- Source meshes must have **Read/Write** enabled
+- 将当前骨骼变换烘焙为统一、可编辑的 Blender Rest Pose。
+- 保留蒙皮权重与 Armature。
+- 保留单帧 BlendShape 通道、逐顶点 delta 及当前非零权重。
+- 保留用户在 Manual Bake 结果上手调的骨骼位置/旋转和 BlendShape 数值。
+- 将缩放补偿骨架标准化为单位缩放，同时保持可见姿势。
+- 将材质贴图内嵌进 FBX。
+- 把常见的 Diffuse、Normal、Emission、Alpha、Metallic、Smoothness 语义映射到标准 FBX 材质通道。
+- 用 `UnityTexture_<属性名>` 自定义元数据保存全部 Unity 材质贴图关联，包括非标准 Shader 属性。
+- 支持生成的 `Texture2D` / `RenderTexture`，以及位于 `Packages/` 中的贴图。
+- 正确处理 NDMF NaNimation 删除骨：裁掉受影响 primitive，而不是让已隐藏身体重新出现。
+- 修复 Unity FBX Exporter 4.2.1 合并重合控制点而静默破坏 BlendShape 的问题。
+- 修复 Renderer Transform 同时作为骨骼时，FBX Skeleton 覆盖 Mesh 的问题。
+- 保存后重新打开 FBX，并验证骨架、bind pose 与通道数量。
+- 采用事务式覆盖：新 FBX 验证成功前不会替换旧文件。
+- 只操作临时、非激活克隆，不修改选中的角色、Prefab 或源资源。
 
-Modular Avatar, NDMF, VRChat SDK, and lilToon are **not compile-time dependencies**. Modular Avatar is only the workflow that produces the intended input hierarchy.
+## 环境要求
 
-## Installation
+首版为了保证 FBX SDK 适配稳定，严格锁定以下版本：
 
-1. In Unity, open **Window > Package Manager**.
-2. Install **FBX Exporter 4.2.1** from the Unity Registry.
-   - If Package Manager selects another version, add this exact entry to `Packages/manifest.json`:
+- Unity **2022.3 LTS**（已验证 2022.3.22f1）
+- Unity FBX Exporter `com.unity.formats.fbx` **4.2.1**
+- Autodesk FBX SDK `com.autodesk.fbx` **4.2.1**（由 FBX Exporter 4.2.1 间接安装）
+- 推荐 Blender **4.2 LTS**（已验证 Blender 4.2.23）
+- 所有源 Mesh 必须开启 **Read/Write**
 
-     ```json
-     "com.unity.formats.fbx": "4.2.1"
-     ```
+Modular Avatar、NDMF、VRChat SDK 和 lilToon **不是编译依赖**。Modular Avatar 只是生成目标输入的工作流。
 
-3. Copy this repository into your project as:
+## 安装
+
+1. 打开 Unity 的 **Window > Package Manager**。
+2. 从 Unity Registry 安装 **FBX Exporter 4.2.1**。
+3. 将本仓库放入项目：
 
    ```text
    Assets/BlenderSafeAvatarFbxExporter
    ```
 
-   You can also add it as a Git submodule at that path.
-4. Wait for Unity to compile the Editor assembly.
+   也可以把仓库作为 Git submodule 添加到这个路径。
+4. 等待 Unity 编译完成。
 
-## Usage
+## 使用步骤
 
-1. Use Modular Avatar's **Manual Bake** workflow.
-2. Select the generated baked avatar root, not the original avatar that still contains Merge Armature components.
-3. Make any final manual adjustments on the baked result:
-   - rotate or move bones;
-   - set BlendShape weights;
-   - choose active materials/textures.
-4. Open **Tools > Avatar > Blender-Safe FBX Exporter**.
-   - Alternatively, right-click the selected root and choose **Avatar > Export Blender-Safe FBX...**.
-5. Assign the baked avatar root.
-6. Leave **Embed all material textures** enabled unless you explicitly want geometry-only material references.
-7. Export the FBX and import it into Blender.
+1. 使用 Modular Avatar 的 **Manual Bake**。
+2. 选择生成的烘焙角色根节点，不要选择仍包含 Merge Armature 等组件的原始 Avatar。
+3. 在烘焙结果上完成最后调整：
+   - 移动或旋转骨骼；
+   - 设置 BlendShape 权重；
+   - 确认当前材质与贴图。
+4. 打开 **Tools > Avatar > Blender-Safe FBX Exporter**。
+   - 或右键当前选择，使用 **Avatar > Export Blender-Safe FBX...**。
+5. 指定 Manual Bake 角色根节点。
+6. 默认保持 **Embed all material textures** 开启。
+7. 导出并在 Blender 中导入 FBX。
 
-The current bone pose becomes the FBX rest pose. This tool does not export an animation clip for those edits.
+当前骨骼姿势会成为 FBX Rest Pose，而不是被写成动画片段。
 
-## Texture behavior
+## 贴图说明
 
-The exporter embeds all material texture properties it can represent:
+- `Assets/` 下有实体源文件的贴图直接读取源文件。
+- `Packages/` 下的贴图通过 Unity Package Manager 解析实际路径。
+- 运行时生成的 `Texture2D` 和 `RenderTexture` 转换为 PNG。
+- Blender 能识别的标准通道会自动连接。
+- 其他 Shader 专用贴图以 FBX 自定义元数据形式保存。
 
-- Physical texture files under `Assets/` are staged from their source files.
-- Texture files under `Packages/` are resolved through Unity Package Manager.
-- Generated `Texture2D` and `RenderTexture` values are converted to PNG.
-- Common standard channels are connected for Blender's importer.
-- Other shader-specific bindings are retained as FBX custom metadata.
+本工具不会完整重建 lilToon 等 Unity Shader。图片与关联会保留，但复杂 Shader 节点通常仍需在 Blender 中手工重建。
 
-Blender cannot reconstruct an arbitrary Unity shader such as lilToon. Embedded images and metadata are preserved, but complex shader graphs may need to be rebuilt manually.
-
-## Programmatic API
+## 代码调用
 
 ```csharp
 using ccd775.AvatarFbxExporter;
@@ -99,42 +99,39 @@ var result = BlenderSafeAvatarFbxExporter.Export(
     overwriteExisting: false);
 ```
 
-`overwriteExisting` defaults to `false` through the three-argument overload. The Editor UI asks for confirmation before passing `true`.
+程序接口默认拒绝覆盖现有文件；Editor UI 会先询问用户，再显式允许覆盖。
 
-The returned `BlenderSafeFbxExportResult` includes mesh, vertex, BlendShape, texture, deletion-conversion, control-point-adjustment, pose-error, skeleton-error, and bind-pose statistics.
+## 重要限制
 
-## Important limitations
+- 不支持一个 BlendShape 中含多个 in-between frame；遇到时会明确拒绝导出。
+- 所有加权骨骼与可选 `rootBone` 都必须位于所选角色层级内。
+- 每个蒙皮顶点必须有有限、非负且总和大于零的骨权重。
+- Mesh 必须可读，且 bind pose 数量必须与骨骼数量一致。
+- Animator、Animation 与 Unity Constraint 不会被导出；它们会从临时副本移除。
+- NaNimation 删除转换会移除所有接触已删除顶点的 primitive；成功窗口会显示受影响数量。
+- 普通 SkinnedMeshRenderer 若带子对象会被拒绝，以免规格化 Renderer Transform 时改变子对象；Renderer 本身同时作为骨骼的情况会自动拆分。
+- 反射、奇异或无法表示为纯 TRS 的骨变换会被拒绝。
+- Unity FBX Exporter 会处理所选根节点下的完整层级，因此支持的静态 Mesh、Camera、Light 也可能进入 FBX。
+- 生成的 Cubemap、Texture Array 等非二维纹理暂不支持自动转换。
+- 材质只是近似映射，不是 Shader 转换器。
+- 0.1.0 目前只在 Windows 上完成认证。
 
-- BlendShapes with multiple in-between frames are rejected because Blender's FBX importer cannot represent them reliably.
-- All weighted bones and the optional `rootBone` must be inside the selected avatar hierarchy.
-- Every skinned vertex must have finite, non-negative weights with a positive total.
-- Meshes must be readable and have one bind pose per bone.
-- Animation components and Unity constraints are intentionally removed from the temporary export clone.
-- NDMF NaNimation conversion removes every primitive that touches a deleted vertex. The success report shows the affected vertex and primitive counts.
-- A regular `SkinnedMeshRenderer` object with child objects is rejected because normalizing that renderer transform could change its children. A renderer hosted on a bone is handled automatically by splitting the mesh to a temporary child node.
-- Reflected, singular, or non-TRS bone transforms cannot be converted safely and are rejected.
-- The complete selected hierarchy is passed to Unity FBX Exporter; supported static meshes, cameras, and lights under that hierarchy may also be exported.
-- Generated cubemaps, texture arrays, and other non-2D texture types are not converted.
-- Material conversion is approximate, not a shader conversion system.
-- Version 0.1.0 is tested on Windows. macOS and Linux Editor behavior has not yet been certified.
+更多细节参见：
 
-See [Documentation~/technical-notes.md](Documentation~/technical-notes.md) and [Documentation~/validation.md](Documentation~/validation.md) for implementation rationale and verification details.
+- [技术说明](Documentation~/technical-notes.md)
+- [验证记录](Documentation~/validation.md)
 
-## Tests
+## 测试
 
-EditMode tests are included under `Tests/Editor` and cover:
+`Tests/Editor` 中包含 EditMode 测试，覆盖：
 
-- preservation of a manually rotated bone;
-- preservation of a nonzero BlendShape value;
-- generated texture embedding;
-- saved-FBX reopen and channel validation;
-- source-object immutability;
-- refusal to overwrite an existing file without explicit permission.
+- 手调骨骼旋转保留；
+- 非零 BlendShape 权重保留；
+- 生成贴图内嵌；
+- 保存后 FBX 重开与通道验证；
+- 源对象不被修改；
+- 未确认时拒绝覆盖旧文件。
 
-Run them from **Window > General > Test Runner > EditMode**.
+## 许可证
 
-## License
-
-The source code in this repository is licensed under the [MIT License](LICENSE.md).
-
-Unity FBX Exporter and Autodesk FBX SDK are dependencies and are not redistributed or relicensed by this repository. See [Third Party Notices.md](Third%20Party%20Notices.md).
+本仓库原创代码使用 [MIT License](LICENSE.md)。Unity FBX Exporter 与 Autodesk FBX SDK 只是依赖，不随本仓库重新授权或分发。详见 [Third Party Notices.md](Third%20Party%20Notices.md)。
