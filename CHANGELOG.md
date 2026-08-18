@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.1.0] - 2026-08-02
+## [0.1.0] - 2026-08-18
 
 ### Added
 
@@ -22,3 +22,4 @@ All notable changes to this project are documented in this file.
 - Inactive temporary clone workflow that leaves source objects unchanged.
 - EditMode tests built entirely from generated, license-safe data.
 - English and Simplified Chinese documentation.
+- Ready-to-import `.unitypackage` distribution through GitHub Releases.

@@ -1,8 +1,9 @@
 # Blender-Safe Avatar FBX Exporter
 
-![从 Unity Modular Avatar Manual Bake 结果导出并在 Blender 中打开](Documentation~/images/blender-safe-export-overview.png)
+![从 Unity Modular Avatar Manual Bake 结果导出并在 Blender 中打开](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.1.0/Documentation~/images/blender-safe-export-overview.png)
 
 [![Source validation](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml/badge.svg)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml)
+[![Latest release](https://img.shields.io/github/v/release/ccd775/BlenderSafeAvatarFbxExporter?label=Release)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 [![Unity 2022.3 LTS](https://img.shields.io/badge/Unity-2022.3%20LTS-black.svg)](https://unity.com/releases/editor/whats-new/2022.3.22)
 
@@ -50,16 +51,27 @@ Modular Avatar、NDMF、VRChat SDK 和 lilToon **不是编译依赖**。Modular 
 
 ## 安装
 
-1. 打开 Unity 的 **Window > Package Manager**。
-2. 从 Unity Registry 安装 **FBX Exporter 4.2.1**。
-3. 将本仓库放入项目：
+### 推荐：GitHub Release 的 `.unitypackage`
 
-   ```text
-   Assets/BlenderSafeAvatarFbxExporter
-   ```
+1. 使用 Unity **2022.3 LTS** 打开目标项目。
+2. 在 **Window > Package Manager** 中，从 Unity Registry 安装 **FBX Exporter 4.2.1**。
+3. 从 [v0.1.0 Release](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/tag/v0.1.0) 下载 [`BlenderSafeAvatarFbxExporter-v0.1.0.unitypackage`](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/download/v0.1.0/BlenderSafeAvatarFbxExporter-v0.1.0.unitypackage)。
+4. 双击该文件，或在 Unity 中使用 **Assets > Import Package > Custom Package...**。
+5. 保持全部文件勾选并点击 **Import**，等待 Editor 程序集编译完成。
 
-   也可以把仓库作为 Git submodule 添加到这个路径。
-4. 等待 Unity 编译完成。
+> `.unitypackage` 只包含本工具，不包含 Unity FBX Exporter 或 Autodesk FBX SDK。必须先安装 FBX Exporter 4.2.1；Autodesk FBX SDK 4.2.1 会随其间接安装。
+
+如果项目中已有旧版或通过源码安装的副本，请先确认没有第二份 `Assets/BlenderSafeAvatarFbxExporter`，避免重复程序集。
+
+### 源码安装
+
+也可以下载或克隆本仓库，并将仓库完整放到：
+
+```text
+Assets/BlenderSafeAvatarFbxExporter
+```
+
+也可在该路径使用 Git submodule。完成后等待 Unity 编译 Editor 程序集。
 
 ## 使用步骤
 
@@ -118,8 +130,8 @@ var result = BlenderSafeAvatarFbxExporter.Export(
 
 更多细节参见：
 
-- [技术说明](Documentation~/technical-notes.md)
-- [验证记录](Documentation~/validation.md)
+- [技术说明](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.1.0/Documentation~/technical-notes.md)
+- [验证记录](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.1.0/Documentation~/validation.md)
 
 ## 测试
 

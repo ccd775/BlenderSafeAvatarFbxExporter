@@ -1,8 +1,9 @@
 # Blender-Safe Avatar FBX Exporter
 
-![A Modular Avatar Manual Bake result exported from Unity and opened in Blender](Documentation~/images/blender-safe-export-overview.png)
+![A Modular Avatar Manual Bake result exported from Unity and opened in Blender](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.1.0/Documentation~/images/blender-safe-export-overview.png)
 
 [![Source validation](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml/badge.svg)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml)
+[![Latest release](https://img.shields.io/github/v/release/ccd775/BlenderSafeAvatarFbxExporter?label=Release)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 [![Unity 2022.3 LTS](https://img.shields.io/badge/Unity-2022.3%20LTS-black.svg)](https://unity.com/releases/editor/whats-new/2022.3.22)
 
@@ -50,22 +51,27 @@ Modular Avatar, NDMF, VRChat SDK, and lilToon are **not compile-time dependencie
 
 ## Installation
 
-1. In Unity, open **Window > Package Manager**.
-2. Install **FBX Exporter 4.2.1** from the Unity Registry.
-   - If Package Manager selects another version, add this exact entry to `Packages/manifest.json`:
+### Recommended: `.unitypackage` from GitHub Releases
 
-     ```json
-     "com.unity.formats.fbx": "4.2.1"
-     ```
+1. Open the target project with Unity **2022.3 LTS**.
+2. In **Window > Package Manager**, install **FBX Exporter 4.2.1** from the Unity Registry.
+3. Download [`BlenderSafeAvatarFbxExporter-v0.1.0.unitypackage`](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/download/v0.1.0/BlenderSafeAvatarFbxExporter-v0.1.0.unitypackage) from the [v0.1.0 release](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/tag/v0.1.0).
+4. Double-click the file, or choose **Assets > Import Package > Custom Package...** in Unity.
+5. Keep all files selected, click **Import**, and wait for the Editor assembly to compile.
 
-3. Copy this repository into your project as:
+> The `.unitypackage` contains only this tool. It does not bundle Unity FBX Exporter or Autodesk FBX SDK. Install FBX Exporter 4.2.1 first; Autodesk FBX SDK 4.2.1 is installed transitively with it.
 
-   ```text
-   Assets/BlenderSafeAvatarFbxExporter
-   ```
+If an older or source-installed copy is already present, make sure there is only one `Assets/BlenderSafeAvatarFbxExporter` folder to avoid duplicate assemblies.
 
-   You can also add it as a Git submodule at that path.
-4. Wait for Unity to compile the Editor assembly.
+### Source installation
+
+Alternatively, download or clone the repository and place the complete repository at:
+
+```text
+Assets/BlenderSafeAvatarFbxExporter
+```
+
+A Git submodule at that path is also supported. Wait for Unity to compile the Editor assembly afterward.
 
 ## Usage
 
@@ -126,7 +132,7 @@ The returned `BlenderSafeFbxExportResult` includes mesh, vertex, BlendShape, tex
 - Material conversion is approximate, not a shader conversion system.
 - Version 0.1.0 is tested on Windows. macOS and Linux Editor behavior has not yet been certified.
 
-See [Documentation~/technical-notes.md](Documentation~/technical-notes.md) and [Documentation~/validation.md](Documentation~/validation.md) for implementation rationale and verification details.
+See [the technical notes](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.1.0/Documentation~/technical-notes.md) and [validation record](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.1.0/Documentation~/validation.md) for implementation rationale and verification details.
 
 ## Tests
 

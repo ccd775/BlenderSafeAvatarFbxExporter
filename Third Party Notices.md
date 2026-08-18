@@ -1,6 +1,6 @@
 # Third Party Notices
 
-This repository contains original source code licensed under the MIT License. It depends on external software that is **not redistributed by this repository** and is not relicensed under MIT.
+This repository and its `.unitypackage` release contain original source code licensed under the MIT License. They depend on external software that is **not redistributed by either distribution** and is not relicensed under MIT.
 
 ## Unity FBX Exporter
 

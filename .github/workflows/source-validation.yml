@@ -55,7 +55,7 @@ jobs:
           if violations:
               raise SystemExit('Project-specific references found:\n' + '\n'.join(violations))
 
-          forbidden_extensions = {'.unity', '.prefab', '.fbx', '.blend', '.vrm'}
+          forbidden_extensions = {'.unity', '.prefab', '.fbx', '.blend', '.vrm', '.unitypackage'}
           leaked_assets = [
               str(path)
               for path in root.rglob('*')
