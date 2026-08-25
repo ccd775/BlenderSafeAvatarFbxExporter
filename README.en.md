@@ -21,11 +21,11 @@ It is intended for Unity-to-Blender VRChat avatar workflows and for exporting a 
 
 > This is an unofficial community tool for VRChat creators and is not affiliated with or endorsed by VRChat Inc. It does not upload avatars or call the VRChat API.
 
-## Companion FBX post-processing tool (in development)
+## Companion FBX post-processing tool
 
-We are also developing a separate repository for further optimization of exported FBX files. It is planned to **merge and consolidate skeletons and skin weights, improve UV-space utilization**, and provide other post-export optimizations. This repository remains focused on safe export from Unity; the companion tool will handle those later optimization steps.
+A separate optimizer is available for exported FBX files. It **merges and consolidates skeletons and skin weights, performs topology-safe cleanup, and can either preserve source UVs or build and rebake semantic Atlases**. This repository remains focused on safe export from Unity; the companion tool handles those later optimization steps.
 
-**Repository:** *In development. A link will be added here when it becomes available.*
+**Companion tool:** [VRChatAvatarFBXOptimizer](https://github.com/ccd775/VRChatAvatarFBXOptimizer)
 
 ## Features
 
