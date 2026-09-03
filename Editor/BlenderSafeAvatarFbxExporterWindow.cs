@@ -27,9 +27,19 @@ namespace ccd775.AvatarFbxExporter
         public int EmbeddedTextureFileCount;
         public long EmbeddedTextureSourceBytes;
         public float MaxPoseBakeError;
+
+        /// <summary>Worst pose-bake deviation as a fraction of the renderer's own size.</summary>
+        public float MaxPoseBakeErrorRatio;
+
+        public int FlattenedBlendShapeChannelCount;
         public int StandardizedBoneCount;
         public float MaxSkeletonNormalizationError;
         public float MaxBindPoseError;
+        public BlenderSafeFbxValidationLevel ValidationLevel;
+
+        /// <summary>Non-fatal problems found during the export. Also written to the console.</summary>
+        public List<string> Warnings = new List<string>();
+
         public List<BlenderSafeRendererReport> Renderers = new List<BlenderSafeRendererReport>();
     }
 
@@ -40,11 +50,21 @@ namespace ccd775.AvatarFbxExporter
         public int VertexCount;
         public int BlendShapeCount;
         public int BlendShapeFrameCount;
+        public int FlattenedBlendShapeChannelCount;
         public int CulledNaNAnimationVertexCount;
         public int CulledNaNAnimationPrimitiveCount;
         public Vector3 BoundsCenter;
         public Vector3 BoundsSize;
+
+        /// <summary>Worst deviation over control points that a triangle actually references.</summary>
         public float MaxPoseBakeError;
+
+        /// <summary>Worst deviation over control points no triangle references.</summary>
+        public float MaxUnrenderedPoseBakeError;
+
+        public float PoseBakeErrorRatio;
+        public int PoseBakeWorstVertexIndex = -1;
+        public string PoseBakeDiagnostic;
     }
 
     public sealed class BlenderSafeAvatarFbxExporterWindow : EditorWindow
@@ -53,6 +73,9 @@ namespace ccd775.AvatarFbxExporter
 
         [SerializeField] private GameObject sourceAvatar;
         [SerializeField] private bool embedAllMaterialTextures = true;
+        [SerializeField] private BlenderSafeFbxValidationLevel validationLevel =
+            BlenderSafeFbxValidationLevel.Balanced;
+        [SerializeField] private bool showAdvanced;
 
         [MenuItem("Tools/Avatar/Blender-Safe FBX Exporter")]
         private static void OpenWindow()
@@ -69,7 +92,7 @@ namespace ccd775.AvatarFbxExporter
         [MenuItem("GameObject/Avatar/Export Blender-Safe FBX...", false, 49)]
         private static void ExportSelected()
         {
-            ExportWithDialog(Selection.activeGameObject, true);
+            ExportWithDialog(Selection.activeGameObject, true, BlenderSafeFbxValidationLevel.Balanced);
         }
 
         [MenuItem("GameObject/Avatar/Export Blender-Safe FBX...", true)]
@@ -97,6 +120,21 @@ namespace ccd775.AvatarFbxExporter
             embedAllMaterialTextures = EditorGUILayout.ToggleLeft(
                 "Embed all material textures", embedAllMaterialTextures);
 
+            showAdvanced = EditorGUILayout.Foldout(showAdvanced, "Advanced", true);
+            if (showAdvanced)
+            {
+                using (new EditorGUI.IndentLevelScope())
+                {
+                    validationLevel = (BlenderSafeFbxValidationLevel)EditorGUILayout.EnumPopup(
+                        new GUIContent(
+                            "Validation",
+                            "How large a geometric deviation aborts the export. Every level measures " +
+                            "and reports the same numbers."),
+                        validationLevel);
+                    EditorGUILayout.LabelField(" ", DescribeValidationLevel(validationLevel), EditorStyles.wordWrappedMiniLabel);
+                }
+            }
+
             EditorGUILayout.Space(8f);
             EditorGUILayout.HelpBox(
                 "Bakes the current bone transforms into one Blender-compatible rest pose while preserving skinning, " +
@@ -114,12 +152,28 @@ namespace ccd775.AvatarFbxExporter
             {
                 if (GUILayout.Button("Export Blender-Safe FBX...", GUILayout.Height(32f)))
                 {
-                    ExportWithDialog(sourceAvatar, embedAllMaterialTextures);
+                    ExportWithDialog(sourceAvatar, embedAllMaterialTextures, validationLevel);
                 }
             }
         }
 
-        private static void ExportWithDialog(GameObject source, bool embedAllTextures)
+        private static string DescribeValidationLevel(BlenderSafeFbxValidationLevel level)
+        {
+            switch (level)
+            {
+                case BlenderSafeFbxValidationLevel.Strict:
+                    return "Aborts on almost any measurable deviation. Matches 0.1.x behaviour.";
+                case BlenderSafeFbxValidationLevel.ReportOnly:
+                    return "Never aborts on a geometric deviation; structural faults still do.";
+                default:
+                    return "Reports small deviations and aborts only on a visible one. Recommended.";
+            }
+        }
+
+        private static void ExportWithDialog(
+            GameObject source,
+            bool embedAllTextures,
+            BlenderSafeFbxValidationLevel validation)
         {
             if (source == null)
             {
@@ -160,7 +214,12 @@ namespace ccd775.AvatarFbxExporter
 
             try
             {
-                var result = BlenderSafeAvatarFbxExporter.Export(source, path, embedAllTextures, true);
+                var result = BlenderSafeAvatarFbxExporter.Export(source, path, new BlenderSafeFbxExportOptions
+                {
+                    EmbedAllMaterialTextures = embedAllTextures,
+                    OverwriteExisting = true,
+                    ValidationLevel = validation
+                });
                 var assetPath = BlenderSafeAvatarFbxExporter.TryGetAssetPath(result.OutputPath);
                 if (!string.IsNullOrEmpty(assetPath))
                 {
@@ -185,9 +244,13 @@ namespace ccd775.AvatarFbxExporter
                         ? $"NaNimation deletion: {result.CulledNaNAnimationVertexCount} vertices / " +
                           $"{result.CulledNaNAnimationPrimitiveCount} primitives culled\n"
                         : string.Empty) +
-                    $"Pose bake max error: {result.MaxPoseBakeError:E3}\n" +
+                    (result.FlattenedBlendShapeChannelCount > 0
+                        ? $"Flattened in-between channels: {result.FlattenedBlendShapeChannelCount}\n"
+                        : string.Empty) +
+                    $"Pose bake max error: {result.MaxPoseBakeError:E3} ({result.MaxPoseBakeErrorRatio:P3} of mesh size)\n" +
                     $"Skeleton normalization max error: {result.MaxSkeletonNormalizationError:E3}\n" +
-                    $"Bind pose max error: {result.MaxBindPoseError:E3}",
+                    $"Bind pose max error: {result.MaxBindPoseError:E3}" +
+                    DescribeWarnings(result),
                     "OK");
             }
             catch (Exception exception)
@@ -195,6 +258,27 @@ namespace ccd775.AvatarFbxExporter
                 Debug.LogException(exception);
                 EditorUtility.DisplayDialog("Blender-Safe FBX Export Failed", exception.Message, "OK");
             }
+        }
+
+        private static string DescribeWarnings(BlenderSafeFbxExportResult result)
+        {
+            if (result.Warnings == null || result.Warnings.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var shown = Mathf.Min(result.Warnings.Count, 3);
+            var text = $"\n\n{result.Warnings.Count} warning(s) — see the console:\n";
+            for (var index = 0; index < shown; index++)
+            {
+                var line = result.Warnings[index].Replace("\n", " ");
+                if (line.Length > 160)
+                {
+                    line = line.Substring(0, 157) + "...";
+                }
+                text += "• " + line + "\n";
+            }
+            return text;
         }
     }
 }

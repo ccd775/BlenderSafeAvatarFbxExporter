@@ -8,9 +8,25 @@ The exporter creates a temporary clone, evaluates the current visible pose, bake
 
 ## BlendShape reconstruction
 
-For each source BlendShape frame, the exporter temporarily applies the frame weight, calls `SkinnedMeshRenderer.BakeMesh`, transforms the result to avatar-root space, and stores the difference from the zero-BlendShape baked mesh. Current renderer BlendShape weights are restored in the FBX `DeformPercent` properties during post-processing.
+For each source BlendShape channel, the exporter temporarily applies a measurement weight, calls `SkinnedMeshRenderer.BakeMesh`, transforms the result to avatar-root space, and stores the difference from the zero-BlendShape baked mesh.
 
-Multiple in-between frames in one BlendShape channel are rejected because Blender's FBX importer does not preserve that representation reliably.
+Every exported target shape carries a full weight of 100, and the recorded `DeformPercent` is rescaled to match. A channel whose source frame weight was not 100 therefore round-trips exactly, and a `DeformPercent` always means the same thing regardless of how the source mesh was authored. A single-frame channel is linear in its weight, so it is measured at 100 directly, which stays well conditioned even when the source frame weight is very small.
+
+Unity's "Clamp BlendShapes (Deprecated)" player setting is applied to the recorded weight, because with that setting on the editor displays a clamped value while an unclamped FBX would extrapolate past it.
+
+Blender's FBX importer keeps one target shape per channel. In-between frames are therefore flattened onto the channel's full-weight frame, measured at that frame so the exported target is the authored full shape rather than an extrapolation past it. The flattening is reported, and the pose-bake deviation quantifies what it actually costs.
+
+## Deviation budgets
+
+Four stages measure how far the rebuilt avatar drifts from what Unity displays: pose baking, skeleton normalization, bind-pose unification, and control-point disambiguation.
+
+Each deviation is divided by the size of the geometry it was measured on, so an avatar authored in centimetres is judged by the same standard as one authored in metres. The dimensionless result is compared against two budgets: above the first it is reported as a warning, above the second the export aborts. `Strict` reproduces the 0.1.x thresholds, `Balanced` is the default, and `ReportOnly` never aborts on a deviation.
+
+The pose-bake number has a precise meaning: it is how far the exported base geometry plus BlendShape targets, evaluated at the recorded weights, sits from the mesh Unity displays. The base geometry and the target shapes themselves are exact regardless of its value, so the deviation only describes the shape at the default BlendShape weights.
+
+It is measured only over control points that a triangle references. Orphan points and geometry culled by NaNimation stay in the vertex array but can never be seen, so they are reported separately instead of vetoing the export.
+
+Structural faults are not deviations and are never budgeted: non-finite values, a mesh that could not be rebuilt with a comparable vertex or channel count, reflected or singular transforms, and bones outside the avatar hierarchy always abort.
 
 ## Control-point disambiguation
 
@@ -18,9 +34,11 @@ Unity FBX Exporter 4.2.1 deduplicates control points by the base `Vector3` posit
 
 Before the Unity FBX export step, duplicate base positions on BlendShape meshes are separated by deterministic one-ULP adjustments. The maximum adjustment is measured and rejected if it exceeds the geometry error budget.
 
-## Renderer hosted on a bone
+## Renderer that cannot be normalized in place
 
-An FBX node can hold only one node attribute. Unity FBX Exporter first attaches a Mesh and can later replace it with a Skeleton attribute when the same Transform is also used as a bone. The temporary clone moves that renderer to a zero-transform child named `__Mesh`, leaving the source hierarchy untouched.
+An FBX node can hold only one node attribute. Unity FBX Exporter first attaches a Mesh and can later replace it with a Skeleton attribute when the same Transform is also used as a bone. A renderer Transform that carries children of its own cannot have its transform zeroed either, because the children would move with it.
+
+In both cases the temporary clone moves the renderer to a zero-transform child named `__Mesh`, leaving the source hierarchy untouched.
 
 ## Skeleton normalization
 
@@ -49,7 +67,9 @@ After Unity FBX Exporter writes its intermediate file, Autodesk FBX SDK is used 
 - save binary FBX;
 - reopen and validate the saved file.
 
-Imported template Number properties in Autodesk FBX SDK for Unity 4.2.1 reject some generic `FbxProperty.Set(float)` calls. A small isolated adapter reopens the native property as `FbxPropertyDouble`. The exporter hard-pins both required packages to 4.2.1 so an SDK update fails clearly instead of using an unverified private binding layout.
+Imported template Number properties in Autodesk FBX SDK for Unity 4.2.1 reject some generic `FbxProperty.Set(float)` calls. A small isolated adapter reopens the native property as `FbxPropertyDouble`. Because the adapter reaches into a private binding layout, it is treated as an optional fallback: when it is unavailable the affected material values are skipped with a warning rather than failing the export.
+
+Both packages are verified against 4.2.1. A different version is accepted with a warning; only a missing package, or one older than 4.1.0, is refused. Material and texture metadata is side data, so a node that cannot be located, a material slot that does not line up, an unsupported texture type, or a rejected property write is reported and skipped instead of discarding the geometry export.
 
 ## Source and output safety
 

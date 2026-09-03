@@ -1,6 +1,6 @@
 # Blender-Safe VRChat Avatar FBX Exporter
 
-![A VRChat avatar exported from a Modular Avatar Manual Bake result in Unity and opened in Blender](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.1.0/Documentation~/images/blender-safe-export-overview.png)
+![A VRChat avatar exported from a Modular Avatar Manual Bake result in Unity and opened in Blender](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.2.0/Documentation~/images/blender-safe-export-overview.png)
 
 [![Source validation](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml/badge.svg)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml)
 [![Latest release](https://img.shields.io/github/v/release/ccd775/BlenderSafeAvatarFbxExporter?label=Release)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/latest)
@@ -31,7 +31,7 @@ A separate optimizer is available for exported FBX files. It **merges and consol
 
 - Bakes the current bone transforms into a unified Blender rest pose.
 - Preserves skin weights and an editable armature.
-- Preserves single-frame BlendShape channels, frame deltas, and current nonzero weights.
+- Preserves BlendShape channels, frame deltas, and current nonzero weights, normalized onto 100-weight target shapes.
 - Preserves manually adjusted bone transforms and BlendShape values from the selected Manual Bake result.
 - Normalizes scale-compensated bone hierarchies while preserving the visible pose.
 - Embeds material textures into the FBX.
@@ -40,20 +40,20 @@ A separate optimizer is available for exported FBX files. It **merges and consol
 - Handles generated `Texture2D`/`RenderTexture` values and textures located under `Packages/`.
 - Handles NDMF NaNimation deletion bones by culling affected primitives instead of turning hidden geometry visible again.
 - Works around Unity FBX Exporter 4.2.1 control-point merging that can silently corrupt BlendShapes.
-- Separates a `SkinnedMeshRenderer` from its host bone when FBX's single-node-attribute rule would otherwise discard the mesh.
+- Separates a `SkinnedMeshRenderer` onto its own node when it hosts a bone or carries child objects, so its transform can be normalized safely.
 - Reopens and validates the saved FBX before replacing the requested output.
 - Uses transactional replacement so an existing FBX is not overwritten until the new file has passed validation.
 - Modifies only a temporary inactive clone; the selected avatar and its assets are not changed.
 
 ## Requirements
 
-The initial release is intentionally pinned to the versions used by its FBX SDK compatibility adapter:
-
 - Unity **2022.3 LTS** (verified with 2022.3.22f1)
-- Unity FBX Exporter package `com.unity.formats.fbx` **4.2.1**
-- Autodesk FBX SDK package `com.autodesk.fbx` **4.2.1** (installed transitively by FBX Exporter 4.2.1)
+- Unity FBX Exporter package `com.unity.formats.fbx` **4.2.1** (the verified version)
+- Autodesk FBX SDK package `com.autodesk.fbx` **4.2.1** (installed transitively)
 - Blender **4.2 LTS** recommended (verified with Blender 4.2.23)
 - Source meshes must have **Read/Write** enabled
+
+Other FBX Exporter and FBX SDK versions are accepted with a warning. Only a missing package, or one older than 4.1.0, is refused. Check the exported FBX in Blender before relying on an unverified version.
 
 Modular Avatar, NDMF, VRChat SDK, and lilToon are **not compile-time dependencies**. Modular Avatar is only the workflow that produces the intended input hierarchy.
 
@@ -63,7 +63,7 @@ Modular Avatar, NDMF, VRChat SDK, and lilToon are **not compile-time dependencie
 
 1. Open the target project with Unity **2022.3 LTS**.
 2. In **Window > Package Manager**, install **FBX Exporter 4.2.1** from the Unity Registry.
-3. Download [`BlenderSafeAvatarFbxExporter-v0.1.0.unitypackage`](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/download/v0.1.0/BlenderSafeAvatarFbxExporter-v0.1.0.unitypackage) from the [v0.1.0 release](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/tag/v0.1.0).
+3. Download [`BlenderSafeAvatarFbxExporter-v0.2.0.unitypackage`](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/download/v0.2.0/BlenderSafeAvatarFbxExporter-v0.2.0.unitypackage) from the [v0.2.0 release](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/tag/v0.2.0).
 4. Double-click the file, or choose **Assets > Import Package > Custom Package...** in Unity.
 5. Keep all files selected, click **Import**, and wait for the Editor assembly to compile.
 
@@ -117,30 +117,51 @@ using ccd775.AvatarFbxExporter;
 var result = BlenderSafeAvatarFbxExporter.Export(
     manualBakeRoot,
     outputPath,
-    embedAllMaterialTextures: true,
-    overwriteExisting: false);
+    new BlenderSafeFbxExportOptions
+    {
+        EmbedAllMaterialTextures = true,
+        OverwriteExisting = false,
+        ValidationLevel = BlenderSafeFbxValidationLevel.Balanced
+    });
+
+foreach (var warning in result.Warnings)
+{
+    Debug.Log(warning);
+}
 ```
 
-`overwriteExisting` defaults to `false` through the three-argument overload. The Editor UI asks for confirmation before passing `true`.
+`OverwriteExisting` defaults to `false`. The Editor UI asks for confirmation before setting it.
 
-The returned `BlenderSafeFbxExportResult` includes mesh, vertex, BlendShape, texture, deletion-conversion, control-point-adjustment, pose-error, skeleton-error, and bind-pose statistics.
+The returned `BlenderSafeFbxExportResult` includes mesh, vertex, BlendShape, texture, deletion-conversion, control-point-adjustment, pose-error, skeleton-error, and bind-pose statistics, plus the warnings recorded during the export.
+
+## Validation and deviation budgets
+
+Four stages measure how far the rebuilt avatar drifts from what Unity displays: pose baking, skeleton normalization, bind-pose unification, and control-point disambiguation. Each deviation is normalized by the size of the geometry it was measured on, so an avatar authored in centimetres is judged by the same standard as one authored in metres.
+
+- Below the reporting budget: silent.
+- Between the reporting and abort budgets: recorded in `result.Warnings` and the console, and the FBX is still written.
+- Above the abort budget: the export is refused, naming the worst control point, the BlendShapes that move it, and the settings that commonly explain it.
+
+**Advanced > Validation** in the exporter window offers `Balanced` (default), `Strict` (the 0.1.x thresholds) and `Report only` (a geometric deviation never aborts).
+
+The pose-bake number has a precise meaning: **the exported base geometry and BlendShape targets are always exact**, so it only describes how the avatar looks at its recorded default BlendShape weights compared with Unity. Structural faults are outside the budget scheme and abort at every level: non-finite values, a mesh that cannot be rebuilt comparably, reflected or singular transforms, and bones outside the avatar hierarchy.
 
 ## Important limitations
 
-- BlendShapes with multiple in-between frames are rejected because Blender's FBX importer cannot represent them reliably.
+- BlendShapes with in-between frames are flattened onto their full-weight frame and reported, because Blender keeps one target shape per channel.
 - All weighted bones and the optional `rootBone` must be inside the selected avatar hierarchy.
-- Every skinned vertex must have finite, non-negative weights with a positive total.
 - Meshes must be readable and have one bind pose per bone.
+- Vertices with negative or zero total bone weight are reported and exported exactly as Unity displays them.
 - Animation components and Unity constraints are intentionally removed from the temporary export clone.
 - NDMF NaNimation conversion removes every primitive that touches a deleted vertex. The success report shows the affected vertex and primitive counts.
-- A regular `SkinnedMeshRenderer` object with child objects is rejected because normalizing that renderer transform could change its children. A renderer hosted on a bone is handled automatically by splitting the mesh to a temporary child node.
+- A renderer hosted on a bone, or one whose Transform carries child objects, is moved onto a dedicated `__Mesh` node automatically.
 - Reflected, singular, or non-TRS bone transforms cannot be converted safely and are rejected.
 - The complete selected hierarchy is passed to Unity FBX Exporter; supported static meshes, cameras, and lights under that hierarchy may also be exported.
-- Generated cubemaps, texture arrays, and other non-2D texture types are not converted.
+- Generated cubemaps, texture arrays, and other non-2D texture types are skipped with a warning.
 - Material conversion is approximate, not a shader conversion system.
-- Version 0.1.0 is tested on Windows. macOS and Linux Editor behavior has not yet been certified.
+- Tested on Windows. macOS and Linux Editor behavior has not yet been certified.
 
-See [the technical notes](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.1.0/Documentation~/technical-notes.md) and [validation record](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.1.0/Documentation~/validation.md) for implementation rationale and verification details.
+See [the technical notes](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.0/Documentation~/technical-notes.md) and [validation record](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.0/Documentation~/validation.md) for implementation rationale and verification details.
 
 ## Tests
 
@@ -151,7 +172,10 @@ EditMode tests are included under `Tests/Editor` and cover:
 - generated texture embedding;
 - saved-FBX reopen and channel validation;
 - source-object immutability;
-- refusal to overwrite an existing file without explicit permission.
+- refusal to overwrite an existing file without explicit permission;
+- automatic separation of a renderer whose Transform carries child objects;
+- in-between BlendShape flattening with a rescaled `DeformPercent`;
+- a sound avatar reporting its pose-bake deviation instead of failing.
 
 Run them from **Window > General > Test Runner > EditMode**.
 

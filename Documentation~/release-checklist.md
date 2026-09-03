@@ -6,6 +6,9 @@
 - [ ] Synthetic FBX reopens through Autodesk FBX SDK.
 - [ ] Synthetic FBX imports in Blender 4.2 LTS.
 - [ ] At least one complex Manual Bake fixture passes mesh/channel and per-control-point validation.
+- [ ] That fixture's reported deviations are recorded as numbers, not just as "the export did not throw".
+- [ ] A fixture exported at `Strict`, `Balanced` and `Report only` produces the same measured deviations and differs only in whether it aborts.
+- [ ] A fixture whose root Transform is scaled produces the same deviation ratios as the unscaled one.
 - [ ] Source Scene/Prefab dirty state is unchanged after export.
 - [ ] Existing-output refusal and explicit transactional overwrite both pass.
 - [ ] Output contains no private avatar assets, absolute staging paths, or unexpected external texture dependencies.

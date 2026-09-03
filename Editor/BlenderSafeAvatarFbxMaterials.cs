@@ -165,14 +165,16 @@ namespace ccd775.AvatarFbxExporter
                 var node = rootNode.FindChild(rendererSet.NodeName, true);
                 if (node == null)
                 {
-                    throw new InvalidOperationException(
-                        $"FBX mesh node '{rendererSet.NodeName}' was not found while applying material properties.");
+                    Warn(
+                        $"FBX mesh node '{rendererSet.NodeName}' was not found while applying material " +
+                        "properties; its materials keep the values Unity's FBX exporter wrote.");
+                    continue;
                 }
                 if (node.GetMaterialCount() < rendererSet.Materials.Count)
                 {
-                    throw new InvalidOperationException(
-                        $"FBX node '{rendererSet.NodeName}' has {node.GetMaterialCount()} materials, " +
-                        $"but Unity has {rendererSet.Materials.Count} material slots.");
+                    Warn(
+                        $"FBX node '{rendererSet.NodeName}' has {node.GetMaterialCount()} materials but Unity " +
+                        $"has {rendererSet.Materials.Count} slots; the extra slots were skipped.");
                 }
 
                 for (var materialIndex = 0; materialIndex < rendererSet.Materials.Count; materialIndex++)
@@ -183,11 +185,13 @@ namespace ccd775.AvatarFbxExporter
                         continue;
                     }
 
-                    var fbxMaterial = node.GetMaterial(materialIndex);
+                    var fbxMaterial = materialIndex < node.GetMaterialCount()
+                        ? node.GetMaterial(materialIndex)
+                        : null;
                     if (fbxMaterial == null)
                     {
-                        throw new InvalidOperationException(
-                            $"FBX material slot {materialIndex} on '{rendererSet.NodeName}' is empty.");
+                        Warn($"FBX material slot {materialIndex} on '{rendererSet.NodeName}' is empty; skipped.");
+                        continue;
                     }
 
                     ApplyMaterialProperties(fbxMaterial, materialSet);
@@ -270,8 +274,11 @@ namespace ccd775.AvatarFbxExporter
                 Math.Abs(actual.mGreen - value.g) > 0.000001 ||
                 Math.Abs(actual.mBlue - value.b) > 0.000001)
             {
-                throw new InvalidOperationException(
-                    $"Could not set FBX material property '{material.GetName()}.{propertyName}'.");
+                // A material colour is already an approximation of a Unity shader; a rejected write
+                // is not a reason to discard the geometry.
+                Warn(
+                    $"Could not set FBX material property '{material.GetName()}.{propertyName}'; " +
+                    "it was left at its template default.");
             }
         }
 
@@ -368,9 +375,13 @@ namespace ccd775.AvatarFbxExporter
 
             if (!(texture is Texture2D) && !(texture is RenderTexture))
             {
-                throw new NotSupportedException(
-                    $"Texture '{texture.name}' used by '{materialName}.{propertyName}' is a {texture.GetType().Name}. " +
-                    "Only Texture2D and RenderTexture values can be converted for FBX embedding.");
+                // Cubemaps, texture arrays and 3D textures have no FBX equivalent. Skipping the one
+                // binding is far cheaper than refusing to export the avatar.
+                Warn(
+                    $"Texture '{texture.name}' used by '{materialName}.{propertyName}' is a " +
+                    $"{texture.GetType().Name}; only Texture2D and RenderTexture can be embedded. " +
+                    "The binding was skipped.");
+                return null;
             }
 
             var stagedPngPath = Path.Combine(

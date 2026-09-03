@@ -37,6 +37,23 @@ One high-complexity fixture produced:
 
 All 378 channels across 16 BlendShape meshes were compared by corresponding control-point index against an independent Unity `BakeMesh(true)` source baseline. The maximum Shape Key error was `9.996004e-6 m`, with zero control points exceeding `0.01 mm`. Maximum base-geometry error was `5.63852e-7 m`.
 
+## Deviation budgets
+
+That fixture is one data point, not a threshold. Geometric checks therefore compare a
+deviation against the size of the geometry it was measured on and use two budgets: a
+reporting budget near what a clean scene actually reaches, and an abort budget set where
+the deviation becomes visible. `Strict` restores the 0.1.x thresholds and `ReportOnly`
+never aborts on a deviation.
+
+A reported deviation is not a failed export. `BlenderSafeFbxExportResult` carries the
+measured value, its ratio to the geometry size, the worst control point, and the
+BlendShapes responsible, so a regression run should assert on those numbers directly
+rather than on whether the export threw.
+
+Structural faults are outside this scheme and always abort: non-finite values, a mesh
+that cannot be rebuilt with a comparable vertex or channel count, reflected or singular
+transforms, and bones outside the avatar hierarchy.
+
 ## Acceptance rules
 
 A regression is not considered passed solely because mesh/channel counts match. Geometry and BlendShape validation should use corresponding control-point indices. Blender command-line scripts must emit an expected completion marker and report file, and their logs must be checked for tracebacks because Blender can return exit code zero after a Python exception.

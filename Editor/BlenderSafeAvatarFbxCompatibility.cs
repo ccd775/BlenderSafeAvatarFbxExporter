@@ -9,10 +9,14 @@ namespace ccd775.AvatarFbxExporter
 {
     public static partial class BlenderSafeAvatarFbxExporter
     {
-        private static int UniquifyBlendShapeControlPoints(GameObject root, out float maxAdjustment)
+        private static int UniquifyBlendShapeControlPoints(
+            GameObject root,
+            out float maxAdjustment,
+            out float referenceLength)
         {
             var adjustedCount = 0;
             maxAdjustment = 0f;
+            referenceLength = 1f;
 
             foreach (var renderer in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
@@ -22,6 +26,7 @@ namespace ccd775.AvatarFbxExporter
                     continue;
                 }
 
+                referenceLength = Mathf.Max(referenceLength, GetBoundsDiagonal(mesh.bounds.size));
                 var vertices = mesh.vertices;
                 var usedVertices = new HashSet<Vector3>();
                 for (var vertexIndex = 0; vertexIndex < vertices.Length; vertexIndex++)
@@ -52,7 +57,11 @@ namespace ccd775.AvatarFbxExporter
             return adjustedCount;
         }
 
-        private static int SeparateBoneHostedSkinnedMeshRenderers(GameObject root)
+        /// <summary>
+        /// Moves every skinned mesh whose Transform cannot be normalized in place onto a dedicated
+        /// zero-transform child, so the exporter never has to ask the user to restructure a rig.
+        /// </summary>
+        private static int SeparateNonNormalizableSkinnedMeshRenderers(GameObject root)
         {
             var renderers = root.GetComponentsInChildren<SkinnedMeshRenderer>(true)
                 .Where(renderer => renderer.sharedMesh != null)
@@ -63,12 +72,16 @@ namespace ccd775.AvatarFbxExporter
 
             foreach (var renderer in renderers)
             {
-                if (!referencedBones.Contains(renderer.transform))
+                // An FBX node cannot carry Mesh and Skeleton attributes at once, and a Transform
+                // with children of its own cannot have its own transform zeroed without dragging
+                // those children along.
+                var hostsBone = referencedBones.Contains(renderer.transform);
+                var hostsChildren = renderer.transform != root.transform && renderer.transform.childCount > 0;
+                if (!hostsBone && !hostsChildren)
                 {
                     continue;
                 }
 
-                // FBX nodes cannot simultaneously carry Mesh and Skeleton node attributes.
                 var meshObject = new GameObject(renderer.name + "__Mesh")
                 {
                     layer = renderer.gameObject.layer,

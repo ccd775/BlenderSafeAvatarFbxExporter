@@ -1,6 +1,6 @@
 # Blender-Safe VRChat Avatar FBX Exporter
 
-![将 Unity 中 Modular Avatar Manual Bake 后的 VRChat 角色导出为 FBX 并在 Blender 中打开](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.1.0/Documentation~/images/blender-safe-export-overview.png)
+![将 Unity 中 Modular Avatar Manual Bake 后的 VRChat 角色导出为 FBX 并在 Blender 中打开](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.2.0/Documentation~/images/blender-safe-export-overview.png)
 
 [![Source validation](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml/badge.svg)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml)
 [![Latest release](https://img.shields.io/github/v/release/ccd775/BlenderSafeAvatarFbxExporter?label=Release)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/latest)
@@ -31,7 +31,7 @@
 
 - 将当前骨骼变换烘焙为统一、可编辑的 Blender Rest Pose。
 - 保留蒙皮权重与 Armature。
-- 保留单帧 BlendShape 通道、逐顶点 delta 及当前非零权重。
+- 保留 BlendShape 通道、逐顶点 delta 及当前非零权重（目标形状统一归一化到满权重 100）。
 - 保留用户在 Manual Bake 结果上手调的骨骼位置/旋转和 BlendShape 数值。
 - 将缩放补偿骨架标准化为单位缩放，同时保持可见姿势。
 - 将材质贴图内嵌进 FBX。
@@ -40,20 +40,20 @@
 - 支持生成的 `Texture2D` / `RenderTexture`，以及位于 `Packages/` 中的贴图。
 - 正确处理 NDMF NaNimation 删除骨：裁掉受影响 primitive，而不是让已隐藏身体重新出现。
 - 修复 Unity FBX Exporter 4.2.1 合并重合控制点而静默破坏 BlendShape 的问题。
-- 修复 Renderer Transform 同时作为骨骼时，FBX Skeleton 覆盖 Mesh 的问题。
+- 修复 Renderer Transform 同时作为骨骼、或带有子对象时无法规格化的问题。
 - 保存后重新打开 FBX，并验证骨架、bind pose 与通道数量。
 - 采用事务式覆盖：新 FBX 验证成功前不会替换旧文件。
 - 只操作临时、非激活克隆，不修改选中的角色、Prefab 或源资源。
 
 ## 环境要求
 
-首版为了保证 FBX SDK 适配稳定，严格锁定以下版本：
-
 - Unity **2022.3 LTS**（已验证 2022.3.22f1）
-- Unity FBX Exporter `com.unity.formats.fbx` **4.2.1**
-- Autodesk FBX SDK `com.autodesk.fbx` **4.2.1**（由 FBX Exporter 4.2.1 间接安装）
+- Unity FBX Exporter `com.unity.formats.fbx` **4.2.1**（已验证版本）
+- Autodesk FBX SDK `com.autodesk.fbx` **4.2.1**（由 FBX Exporter 间接安装）
 - 推荐 Blender **4.2 LTS**（已验证 Blender 4.2.23）
 - 所有源 Mesh 必须开启 **Read/Write**
+
+其他版本的 FBX Exporter / FBX SDK 会以警告方式放行；只有缺少包体或版本低于 4.1.0 才会拒绝导出。使用未验证版本时，请先在 Blender 中确认导出结果。
 
 Modular Avatar、NDMF、VRChat SDK 和 lilToon **不是编译依赖**。Modular Avatar 只是生成目标输入的工作流。
 
@@ -63,7 +63,7 @@ Modular Avatar、NDMF、VRChat SDK 和 lilToon **不是编译依赖**。Modular 
 
 1. 使用 Unity **2022.3 LTS** 打开目标项目。
 2. 在 **Window > Package Manager** 中，从 Unity Registry 安装 **FBX Exporter 4.2.1**。
-3. 从 [v0.1.0 Release](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/tag/v0.1.0) 下载 [`BlenderSafeAvatarFbxExporter-v0.1.0.unitypackage`](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/download/v0.1.0/BlenderSafeAvatarFbxExporter-v0.1.0.unitypackage)。
+3. 从 [v0.2.0 Release](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/tag/v0.2.0) 下载 [`BlenderSafeAvatarFbxExporter-v0.2.0.unitypackage`](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/download/v0.2.0/BlenderSafeAvatarFbxExporter-v0.2.0.unitypackage)。
 4. 双击该文件，或在 Unity 中使用 **Assets > Import Package > Custom Package...**。
 5. 保持全部文件勾选并点击 **Import**，等待 Editor 程序集编译完成。
 
@@ -115,31 +115,52 @@ using ccd775.AvatarFbxExporter;
 var result = BlenderSafeAvatarFbxExporter.Export(
     manualBakeRoot,
     outputPath,
-    embedAllMaterialTextures: true,
-    overwriteExisting: false);
+    new BlenderSafeFbxExportOptions
+    {
+        EmbedAllMaterialTextures = true,
+        OverwriteExisting = false,
+        ValidationLevel = BlenderSafeFbxValidationLevel.Balanced
+    });
+
+foreach (var warning in result.Warnings)
+{
+    Debug.Log(warning);
+}
 ```
 
 程序接口默认拒绝覆盖现有文件；Editor UI 会先询问用户，再显式允许覆盖。
 
+## 校验与偏差预算
+
+导出过程会测量四项几何偏差：姿势烘焙、骨架标准化、bind pose 统一、控制点去重。每项都按被测几何体自身的尺寸归一化，因此以厘米为单位建模的角色和以米为单位的角色适用同一套标准。
+
+- 偏差低于报告阈值：静默通过。
+- 介于报告阈值与中止阈值之间：写入 `result.Warnings` 和 Console，FBX 正常输出。
+- 超过中止阈值：拒绝导出，并给出最差控制点、相关 BlendShape 以及常见成因。
+
+窗口的 **Advanced > Validation** 提供三档：`Balanced`（默认）、`Strict`（等同 0.1.x）、`Report only`（几何偏差永不中止）。
+
+姿势烘焙偏差的含义很具体：**导出的基础网格与 BlendShape 目标本身始终是精确的**，该数值只描述"形态键取默认值时的外观"与 Unity 的差距。结构性问题（非有限数值、网格无法重建、反射/奇异变换、层级外骨骼）不受预算控制，任何档位下都会中止。
+
 ## 重要限制
 
-- 不支持一个 BlendShape 中含多个 in-between frame；遇到时会明确拒绝导出。
+- 一个 BlendShape 含多个 in-between frame 时，会压平为满权重帧并给出警告（Blender 每个通道只保留一个目标形状）。
 - 所有加权骨骼与可选 `rootBone` 都必须位于所选角色层级内。
-- 每个蒙皮顶点必须有有限、非负且总和大于零的骨权重。
 - Mesh 必须可读，且 bind pose 数量必须与骨骼数量一致。
+- 权重为负或总和为零的顶点会按 Unity 实际显示的样子导出，并给出警告。
 - Animator、Animation 与 Unity Constraint 不会被导出；它们会从临时副本移除。
 - NaNimation 删除转换会移除所有接触已删除顶点的 primitive；成功窗口会显示受影响数量。
-- 普通 SkinnedMeshRenderer 若带子对象会被拒绝，以免规格化 Renderer Transform 时改变子对象；Renderer 本身同时作为骨骼的情况会自动拆分。
+- Renderer Transform 同时作为骨骼、或带有子对象时，会自动拆分到独立的 `__Mesh` 节点。
 - 反射、奇异或无法表示为纯 TRS 的骨变换会被拒绝。
 - Unity FBX Exporter 会处理所选根节点下的完整层级，因此支持的静态 Mesh、Camera、Light 也可能进入 FBX。
-- 生成的 Cubemap、Texture Array 等非二维纹理暂不支持自动转换。
+- 生成的 Cubemap、Texture Array 等非二维纹理会跳过并给出警告。
 - 材质只是近似映射，不是 Shader 转换器。
-- 0.1.0 目前只在 Windows 上完成认证。
+- 目前只在 Windows 上完成认证。
 
 更多细节参见：
 
-- [技术说明](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.1.0/Documentation~/technical-notes.md)
-- [验证记录](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.1.0/Documentation~/validation.md)
+- [技术说明](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.0/Documentation~/technical-notes.md)
+- [验证记录](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.0/Documentation~/validation.md)
 
 ## 测试
 
@@ -150,7 +171,10 @@ var result = BlenderSafeAvatarFbxExporter.Export(
 - 生成贴图内嵌；
 - 保存后 FBX 重开与通道验证；
 - 源对象不被修改；
-- 未确认时拒绝覆盖旧文件。
+- 未确认时拒绝覆盖旧文件；
+- 带子对象的 Renderer 自动拆分；
+- in-between BlendShape 压平并按满权重重新标定 `DeformPercent`；
+- 正常角色只报告偏差、不中止导出。
 
 ## 许可证
 

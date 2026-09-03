@@ -16,14 +16,20 @@ namespace ccd775.AvatarFbxExporter
 {
     public static partial class BlenderSafeAvatarFbxExporter
     {
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
 
-        private const string RequiredFbxExporterVersion = "4.2.1";
-        private const string RequiredFbxSdkVersion = "4.2.1";
-        private const float PoseErrorTolerance = 0.0001f;
-        private const float MatrixErrorTolerance = 0.0001f;
-        private const double FbxMatrixErrorTolerance = 0.0000001;
-        private const double FbxShearTolerance = 0.00000001;
+        private const string TestedFbxExporterVersion = "4.2.1";
+        private const string TestedFbxSdkVersion = "4.2.1";
+        private const string MinimumFbxExporterVersion = "4.1.0";
+        private const string MinimumFbxSdkVersion = "4.1.0";
+
+        // Bind-pose checks run in double precision on the FBX side, so they use their own
+        // dimensionless budgets. The warn value is what a clean scene actually reaches; the fail
+        // value is where the deviation starts to matter geometrically.
+        private const double FbxMatrixWarnTolerance = 0.0000001;
+        private const double FbxMatrixFailTolerance = 0.0001;
+        private const double FbxShearWarnTolerance = 0.00000001;
+        private const double FbxShearFailTolerance = 0.0001;
 
         private sealed class BlendShapeWeightSet
         {
@@ -34,7 +40,15 @@ namespace ccd775.AvatarFbxExporter
         private struct BlendShapeWeight
         {
             public string Name;
+
+            /// <summary>Value written to FBX DeformPercent, against a 100-weight target shape.</summary>
             public float Weight;
+
+            /// <summary>Weight the Unity renderer carried before clamping and rescaling.</summary>
+            public float SourceWeight;
+
+            /// <summary>Frame weight the source mesh used for this channel.</summary>
+            public float SourceFrameWeight;
         }
 
         private sealed class RendererMaterialSet
@@ -80,6 +94,50 @@ namespace ccd775.AvatarFbxExporter
             bool embedAllMaterialTextures,
             bool overwriteExisting)
         {
+            return Export(sourceAvatar, outputPath, new BlenderSafeFbxExportOptions
+            {
+                EmbedAllMaterialTextures = embedAllMaterialTextures,
+                OverwriteExisting = overwriteExisting
+            });
+        }
+
+        public static BlenderSafeFbxExportResult Export(
+            GameObject sourceAvatar,
+            string outputPath,
+            BlenderSafeFbxExportOptions options)
+        {
+            options = options ?? new BlenderSafeFbxExportOptions();
+            if (activeExport != null)
+            {
+                throw new InvalidOperationException("A Blender-Safe FBX export is already running.");
+            }
+
+            var context = new ExportContext
+            {
+                Options = options,
+                Result = new BlenderSafeFbxExportResult()
+            };
+            activeExport = context;
+            try
+            {
+                return ExportInternal(sourceAvatar, outputPath, options, context.Result);
+            }
+            finally
+            {
+                FlushSuppressedWarnings();
+                activeExport = null;
+            }
+        }
+
+        private static BlenderSafeFbxExportResult ExportInternal(
+            GameObject sourceAvatar,
+            string outputPath,
+            BlenderSafeFbxExportOptions options,
+            BlenderSafeFbxExportResult result)
+        {
+            var embedAllMaterialTextures = options.EmbedAllMaterialTextures;
+            var overwriteExisting = options.OverwriteExisting;
+
             ValidateEnvironment();
             ValidateSource(sourceAvatar);
 
@@ -116,21 +174,19 @@ namespace ccd775.AvatarFbxExporter
                 };
                 cloneContainer.SetActive(false);
                 clone = Object.Instantiate(sourceAvatar, cloneContainer.transform, true);
-                var separatedBoneRendererCount = SeparateBoneHostedSkinnedMeshRenderers(clone);
+                var separatedBoneRendererCount = SeparateNonNormalizableSkinnedMeshRenderers(clone);
                 clone.name = MakeUniqueCompatibleNames(clone, out var renamedCount);
                 clone.hideFlags = HideFlags.HideInHierarchy | HideFlags.DontSaveInEditor;
                 clone.transform.position = Vector3.zero;
 
                 RemoveAnimationDrivers(clone);
 
-                var result = new BlenderSafeFbxExportResult
-                {
-                    OutputPath = fullOutputPath,
-                    TransformCount = clone.GetComponentsInChildren<Transform>(true).Length,
-                    RenamedTransformCount = renamedCount,
-                    SeparatedBoneRendererCount = separatedBoneRendererCount,
-                    EmbeddedTextures = embedAllMaterialTextures
-                };
+                result.OutputPath = fullOutputPath;
+                result.ValidationLevel = options.ValidationLevel;
+                result.TransformCount = clone.GetComponentsInChildren<Transform>(true).Length;
+                result.RenamedTransformCount = renamedCount;
+                result.SeparatedBoneRendererCount = separatedBoneRendererCount;
+                result.EmbeddedTextures = embedAllMaterialTextures;
 
                 var materialSets = CollectMaterialTextures(
                     clone,
@@ -141,31 +197,35 @@ namespace ccd775.AvatarFbxExporter
                 RemoveNaNAnimationDeletionTransforms(clone);
                 result.StandardizedBoneCount = StandardizeSkeletonScales(
                     clone,
-                    out var skeletonNormalizationError);
+                    out var skeletonNormalizationError,
+                    out var skeletonReferenceLength);
                 result.MaxSkeletonNormalizationError = skeletonNormalizationError;
-                if (result.MaxSkeletonNormalizationError > PoseErrorTolerance)
-                {
-                    throw new InvalidOperationException(
-                        $"Skeleton scale normalization changed the visible mesh. " +
-                        $"Max vertex error: {result.MaxSkeletonNormalizationError:E6}");
-                }
-                result.MaxBindPoseError = ValidateUnifiedBindPoses(clone);
-                if (result.MaxBindPoseError > MatrixErrorTolerance)
-                {
-                    throw new InvalidOperationException(
-                        $"The generated bind poses are not unified. Max matrix error: {result.MaxBindPoseError:E6}");
-                }
+                ReportGeometryDeviation(
+                    "Skeleton scale normalization",
+                    result.MaxSkeletonNormalizationError,
+                    skeletonReferenceLength,
+                    "Setting every bone to unit scale moved skinned vertices. Bone rotations and " +
+                    "positions were restored exactly; only scale-compensated hierarchies can drift.");
+
+                result.MaxBindPoseError = ValidateUnifiedBindPoses(clone, out var bindPoseReferenceLength);
+                ReportGeometryDeviation(
+                    "Bind-pose unification",
+                    result.MaxBindPoseError,
+                    bindPoseReferenceLength,
+                    "Two renderers disagree about where a shared bone rests. Blender keeps one rest " +
+                    "matrix per bone, so the mesh with the losing bind pose can import shifted.");
 
                 result.AdjustedFbxControlPointCount = UniquifyBlendShapeControlPoints(
                     clone,
-                    out var maxControlPointAdjustment);
+                    out var maxControlPointAdjustment,
+                    out var controlPointReferenceLength);
                 result.MaxFbxControlPointAdjustment = maxControlPointAdjustment;
-                if (result.MaxFbxControlPointAdjustment > PoseErrorTolerance)
-                {
-                    throw new InvalidOperationException(
-                        $"FBX control-point disambiguation changed the mesh too much. " +
-                        $"Max vertex adjustment: {result.MaxFbxControlPointAdjustment:E6}");
-                }
+                ReportGeometryDeviation(
+                    "FBX control-point disambiguation",
+                    result.MaxFbxControlPointAdjustment,
+                    controlPointReferenceLength,
+                    "Coincident vertices with different BlendShape deltas were separated so the FBX " +
+                    "exporter cannot merge them. The nudge is applied to the base geometry.");
 
                 var exportedPath = ModelExporter.ExportObject(stagingPath, clone);
                 if (string.IsNullOrEmpty(exportedPath) || !File.Exists(stagingPath))
@@ -240,9 +300,6 @@ namespace ccd775.AvatarFbxExporter
             {
                 throw new InvalidOperationException("The selected object has no SkinnedMeshRenderer.");
             }
-            var rendererTransformsUsedAsBones = new HashSet<Transform>(
-                renderers.SelectMany(renderer => renderer.bones).Where(bone => bone != null));
-
             foreach (var renderer in renderers)
             {
                 var mesh = renderer.sharedMesh;
@@ -259,14 +316,9 @@ namespace ccd775.AvatarFbxExporter
                 {
                     throw new InvalidOperationException($"Skinned mesh '{mesh.name}' has no bones.");
                 }
-                if (renderer.transform != sourceAvatar.transform &&
-                    renderer.transform.childCount > 0 &&
-                    !rendererTransformsUsedAsBones.Contains(renderer.transform))
-                {
-                    throw new InvalidOperationException(
-                        $"Skinned mesh object '{GetPath(renderer.transform, sourceAvatar.transform)}' has child objects. " +
-                        "Move those children out before exporting so the mesh transform can be normalized safely.");
-                }
+                // A renderer transform that also carries children (or acts as a bone) cannot be
+                // normalized in place. SeparateNonNormalizableSkinnedMeshRenderers moves it onto a
+                // dedicated child on the clone, so this no longer has to be the user's problem.
                 if (mesh.bindposes.Length != renderer.bones.Length)
                 {
                     throw new InvalidOperationException(
@@ -280,15 +332,6 @@ namespace ccd775.AvatarFbxExporter
                         $"Root bone '{renderer.rootBone.name}' used by mesh '{mesh.name}' is outside the selected avatar hierarchy.");
                 }
                 ValidateBoneWeights(mesh, renderer.bones.Length);
-                for (var shapeIndex = 0; shapeIndex < mesh.blendShapeCount; shapeIndex++)
-                {
-                    if (mesh.GetBlendShapeFrameCount(shapeIndex) > 1)
-                    {
-                        throw new InvalidOperationException(
-                            $"BlendShape '{mesh.GetBlendShapeName(shapeIndex)}' on mesh '{mesh.name}' uses in-between frames. " +
-                            "Blender's FBX importer does not support multiple frames in one BlendShape channel.");
-                    }
-                }
                 var weightedBoneIndices = GetWeightedBoneIndices(mesh);
                 for (var boneIndex = 0; boneIndex < renderer.bones.Length; boneIndex++)
                 {
@@ -415,9 +458,18 @@ namespace ccd775.AvatarFbxExporter
                         material.name,
                         propertyName);
                     stagedPaths.Add(cacheKey, stagedPath);
-                    result.EmbeddedTextureSourceBytes += File.Exists(sourceFullPath)
-                        ? new FileInfo(sourceFullPath).Length
-                        : new FileInfo(stagedPath).Length;
+                    if (!string.IsNullOrEmpty(stagedPath))
+                    {
+                        result.EmbeddedTextureSourceBytes += File.Exists(sourceFullPath)
+                            ? new FileInfo(sourceFullPath).Length
+                            : new FileInfo(stagedPath).Length;
+                    }
+                }
+
+                // A texture the FBX format cannot carry is skipped rather than fatal.
+                if (string.IsNullOrEmpty(stagedPath))
+                {
+                    continue;
                 }
 
                 materialSet.Bindings.Add(new TextureBinding
@@ -491,20 +543,61 @@ namespace ccd775.AvatarFbxExporter
                 result.CulledNaNAnimationVertexCount += report.CulledNaNAnimationVertexCount;
                 result.CulledNaNAnimationPrimitiveCount += report.CulledNaNAnimationPrimitiveCount;
                 result.MaxPoseBakeError = Mathf.Max(result.MaxPoseBakeError, report.MaxPoseBakeError);
+                result.MaxPoseBakeErrorRatio = Mathf.Max(result.MaxPoseBakeErrorRatio, report.PoseBakeErrorRatio);
+                result.FlattenedBlendShapeChannelCount += report.FlattenedBlendShapeChannelCount;
             }
 
-            if (result.MaxPoseBakeError > PoseErrorTolerance)
+            // The gate is evaluated on the renderer with the worst *relative* deviation, so an
+            // avatar authored at a different unit scale is judged the same way.
+            var worst = result.Renderers
+                .OrderByDescending(report => report.PoseBakeErrorRatio)
+                .FirstOrDefault();
+
+            // A structural mismatch is not a deviation to be budgeted; the rebuilt mesh simply is
+            // not comparable to the source, so no validation level may wave it through.
+            var structural = result.Renderers.FirstOrDefault(report => float.IsInfinity(report.MaxPoseBakeError));
+            if (structural != null)
             {
-                var failedRenderers = string.Join(
+                throw new InvalidOperationException(
+                    structural.PoseBakeDiagnostic ??
+                    $"Renderer '{structural.Name}' could not be rebuilt into a comparable mesh.");
+            }
+
+            if (worst != null && worst.MaxPoseBakeError > 0f)
+            {
+                var affected = string.Join(
                     ", ",
                     result.Renderers
-                        .Where(report => report.MaxPoseBakeError > PoseErrorTolerance)
-                        .OrderByDescending(report => report.MaxPoseBakeError)
+                        .Where(report => report.PoseBakeErrorRatio >= worst.PoseBakeErrorRatio * 0.1f)
+                        .OrderByDescending(report => report.PoseBakeErrorRatio)
                         .Take(8)
                         .Select(report => $"{report.Name}={report.MaxPoseBakeError:E3}"));
-                throw new InvalidOperationException(
-                    $"Pose baking changed the visible mesh. Max vertex error: {result.MaxPoseBakeError:E6}. " +
-                    $"Affected renderers: {failedRenderers}");
+
+                var detail = new List<string> { $"Affected renderers: {affected}." };
+                if (!string.IsNullOrEmpty(worst.PoseBakeDiagnostic))
+                {
+                    detail.Add(worst.PoseBakeDiagnostic);
+                }
+                var environment = DescribeBlendShapeEnvironment(weightSets);
+                if (!string.IsNullOrEmpty(environment))
+                {
+                    detail.Add(environment);
+                }
+                if (worst.MaxUnrenderedPoseBakeError > worst.MaxPoseBakeError)
+                {
+                    detail.Add(
+                        $"Control points that no triangle references drift up to " +
+                        $"{worst.MaxUnrenderedPoseBakeError:E3}; those are not measured by this gate.");
+                }
+
+                ReportGeometryDeviation(
+                    "Pose baking",
+                    worst.MaxPoseBakeError,
+                    GetBoundsDiagonal(worst.BoundsSize),
+                    "The exported base geometry and BlendShape targets are exact. Only the shape at " +
+                    "the recorded default BlendShape weights differs from the Unity preview, so the " +
+                    "avatar re-imports correctly once those weights are re-applied.",
+                    string.Join("\n", detail));
             }
 
             return weightSets;
@@ -528,14 +621,6 @@ namespace ccd775.AvatarFbxExporter
             }
 
             weightSet = new BlendShapeWeightSet { NodeName = renderer.name };
-            for (var shapeIndex = 0; shapeIndex < shapeCount; shapeIndex++)
-            {
-                weightSet.Weights.Add(new BlendShapeWeight
-                {
-                    Name = sourceMesh.GetBlendShapeName(shapeIndex),
-                    Weight = originalWeights[shapeIndex]
-                });
-            }
 
             var referenceMesh = new Mesh { name = sourceMesh.name + "__Reference" };
             var frameMesh = new Mesh { name = sourceMesh.name + "__Frame" };
@@ -589,58 +674,124 @@ namespace ccd775.AvatarFbxExporter
                     : null;
 
                 var frameTotal = 0;
+                var flattenedChannels = 0;
+                var exportedShapeNames = new HashSet<string>(StringComparer.Ordinal);
                 for (var shapeIndex = 0; shapeIndex < shapeCount; shapeIndex++)
                 {
-                    var frameCount = sourceMesh.GetBlendShapeFrameCount(shapeIndex);
-                    frameTotal += frameCount;
-                    for (var frameIndex = 0; frameIndex < frameCount; frameIndex++)
+                    var shapeName = sourceMesh.GetBlendShapeName(shapeIndex);
+                    var sourceFrameCount = sourceMesh.GetBlendShapeFrameCount(shapeIndex);
+                    if (sourceFrameCount == 0)
                     {
-                        var frameWeight = sourceMesh.GetBlendShapeFrameWeight(shapeIndex, frameIndex);
-                        renderer.SetBlendShapeWeight(shapeIndex, frameWeight);
-                        renderer.BakeMesh(frameMesh, false);
-                        ValidateFiniteMesh(
-                            frameMesh,
-                            renderer,
-                            $"BlendShape '{sourceMesh.GetBlendShapeName(shapeIndex)}' frame {frameIndex}");
-                        TransformMesh(frameMesh, rendererToRoot);
-                        ValidateFiniteMesh(
-                            frameMesh,
-                            renderer,
-                            $"transformed BlendShape '{sourceMesh.GetBlendShapeName(shapeIndex)}' frame {frameIndex}");
-                        renderer.SetBlendShapeWeight(shapeIndex, 0f);
-
-                        var frameVertices = frameMesh.vertices;
-                        for (var vertexIndex = 0; vertexIndex < deltaVertices.Length; vertexIndex++)
-                        {
-                            deltaVertices[vertexIndex] = frameVertices[vertexIndex] - baseVertices[vertexIndex];
-                        }
-
-                        if (deltaNormals != null)
-                        {
-                            var frameNormals = frameMesh.normals;
-                            for (var vertexIndex = 0; vertexIndex < deltaNormals.Length; vertexIndex++)
-                            {
-                                deltaNormals[vertexIndex] = frameNormals[vertexIndex] - baseNormals[vertexIndex];
-                            }
-                        }
-
-                        if (deltaTangents != null)
-                        {
-                            var frameTangents = frameMesh.tangents;
-                            for (var vertexIndex = 0; vertexIndex < deltaTangents.Length; vertexIndex++)
-                            {
-                                deltaTangents[vertexIndex] = (Vector3)frameTangents[vertexIndex] -
-                                                             (Vector3)baseTangents[vertexIndex];
-                            }
-                        }
-
-                        bakedMesh.AddBlendShapeFrame(
-                            sourceMesh.GetBlendShapeName(shapeIndex),
-                            frameWeight,
-                            deltaVertices,
-                            deltaNormals,
-                            deltaTangents);
+                        // Skipped entirely so the exported channel list stays aligned with the
+                        // recorded weights.
+                        Warn($"BlendShape '{shapeName}' on '{renderer.name}' has no frames and was skipped.");
+                        continue;
                     }
+
+                    // Mesh.AddBlendShapeFrame appends to an existing channel when the name repeats,
+                    // which would silently merge two shapes into one.
+                    if (!exportedShapeNames.Add(shapeName))
+                    {
+                        var uniqueName = shapeName;
+                        var suffix = 2;
+                        while (!exportedShapeNames.Add(uniqueName))
+                        {
+                            uniqueName = shapeName + "__" + suffix++;
+                        }
+                        Warn(
+                            $"BlendShape '{shapeName}' on '{renderer.name}' is defined more than once; " +
+                            $"the duplicate was exported as '{uniqueName}'.");
+                        shapeName = uniqueName;
+                    }
+
+                    var sourceFrameWeight = sourceMesh.GetBlendShapeFrameWeight(
+                        shapeIndex,
+                        sourceFrameCount - 1);
+                    if (sourceFrameCount > 1)
+                    {
+                        // Blender's FBX importer keeps one target shape per channel, so in-between
+                        // frames are flattened onto the full-weight frame instead of refusing the
+                        // export. Any resulting drift is measured by the pose-bake deviation.
+                        flattenedChannels++;
+                        Warn(
+                            $"BlendShape '{shapeName}' on '{renderer.name}' has {sourceFrameCount} " +
+                            "in-between frames. Blender keeps one target shape per channel, so only " +
+                            "the full-weight frame was exported.");
+                    }
+
+                    // A single-frame channel is linear in its weight, so the target shape is
+                    // measured at the normalized full weight: that stays well conditioned even when
+                    // the source frame weight is tiny. A flattened in-between channel is measured at
+                    // its own last frame instead, so the exported target is the authored full shape
+                    // rather than an extrapolation past it.
+                    var measureWeight = sourceFrameCount > 1
+                        ? sourceFrameWeight
+                        : NormalizedBlendShapeFrameWeight;
+                    if (PlayerSettings.legacyClampBlendShapeWeights)
+                    {
+                        measureWeight = Mathf.Clamp(measureWeight, 0f, NormalizedBlendShapeFrameWeight);
+                    }
+                    if (Mathf.Abs(measureWeight) <= 0.000001f)
+                    {
+                        Warn(
+                            $"BlendShape '{shapeName}' on '{renderer.name}' has a zero frame weight " +
+                            "and was exported as an empty channel.");
+                        measureWeight = NormalizedBlendShapeFrameWeight;
+                    }
+
+                    renderer.SetBlendShapeWeight(shapeIndex, measureWeight);
+                    renderer.BakeMesh(frameMesh, false);
+                    ValidateFiniteMesh(frameMesh, renderer, $"BlendShape '{shapeName}'");
+                    TransformMesh(frameMesh, rendererToRoot);
+                    ValidateFiniteMesh(frameMesh, renderer, $"transformed BlendShape '{shapeName}'");
+                    renderer.SetBlendShapeWeight(shapeIndex, 0f);
+
+                    var frameVertices = frameMesh.vertices;
+                    for (var vertexIndex = 0; vertexIndex < deltaVertices.Length; vertexIndex++)
+                    {
+                        deltaVertices[vertexIndex] = frameVertices[vertexIndex] - baseVertices[vertexIndex];
+                    }
+
+                    if (deltaNormals != null)
+                    {
+                        var frameNormals = frameMesh.normals;
+                        for (var vertexIndex = 0; vertexIndex < deltaNormals.Length; vertexIndex++)
+                        {
+                            deltaNormals[vertexIndex] = frameNormals[vertexIndex] - baseNormals[vertexIndex];
+                        }
+                    }
+
+                    if (deltaTangents != null)
+                    {
+                        var frameTangents = frameMesh.tangents;
+                        for (var vertexIndex = 0; vertexIndex < deltaTangents.Length; vertexIndex++)
+                        {
+                            deltaTangents[vertexIndex] = (Vector3)frameTangents[vertexIndex] -
+                                                         (Vector3)baseTangents[vertexIndex];
+                        }
+                    }
+
+                    bakedMesh.AddBlendShapeFrame(
+                        shapeName,
+                        NormalizedBlendShapeFrameWeight,
+                        deltaVertices,
+                        deltaNormals,
+                        deltaTangents);
+                    frameTotal++;
+
+                    // DeformPercent is expressed against the normalized 100-weight target, so the
+                    // Unity weight is rescaled by whatever weight the target was measured at.
+                    var effectiveWeight = ToRecordedBlendShapeWeight(
+                        originalWeights[shapeIndex],
+                        shapeName,
+                        renderer.name);
+                    weightSet.Weights.Add(new BlendShapeWeight
+                    {
+                        Name = shapeName,
+                        Weight = effectiveWeight * (NormalizedBlendShapeFrameWeight / measureWeight),
+                        SourceWeight = originalWeights[shapeIndex],
+                        SourceFrameWeight = sourceFrameWeight
+                    });
                 }
 
                 if (renderer.transform != avatarRoot)
@@ -662,10 +813,20 @@ namespace ccd775.AvatarFbxExporter
 
                 RestoreBlendShapeWeights(renderer, originalWeights);
                 report.BlendShapeFrameCount = frameTotal;
-                report.MaxPoseBakeError = CalculateBlendShapeReconstructionError(
+                report.FlattenedBlendShapeChannelCount = flattenedChannels;
+
+                var deviation = MeasureBlendShapeReconstruction(
                     referenceMesh,
                     renderer.sharedMesh,
-                    originalWeights);
+                    weightSet.Weights,
+                    renderer.name);
+                report.MaxPoseBakeError = deviation.MaxError;
+                report.MaxUnrenderedPoseBakeError = deviation.MaxUnrenderedError;
+                report.PoseBakeWorstVertexIndex = deviation.WorstVertexIndex;
+                report.PoseBakeErrorRatio = ToDeviationRatio(
+                    deviation.MaxError,
+                    GetBoundsDiagonal(report.BoundsSize));
+                report.PoseBakeDiagnostic = deviation.Diagnostic;
                 return report;
             }
             finally
@@ -1110,6 +1271,7 @@ namespace ccd775.AvatarFbxExporter
                 }
 
                 var cursor = 0;
+                var degenerateVertices = 0;
                 for (var vertexIndex = 0; vertexIndex < counts.Length; vertexIndex++)
                 {
                     var totalWeight = 0f;
@@ -1121,22 +1283,28 @@ namespace ccd775.AvatarFbxExporter
                                 $"Skinned mesh '{mesh.name}' has a truncated bone-weight array.");
                         }
                         var weight = weights[cursor++];
-                        if (!IsFinite(weight.weight) || weight.weight < 0f)
+                        if (!IsFinite(weight.weight))
                         {
                             throw new InvalidOperationException(
-                                $"Skinned mesh '{mesh.name}' has an invalid bone weight at vertex {vertexIndex}.");
+                                $"Skinned mesh '{mesh.name}' has a non-finite bone weight at vertex {vertexIndex}.");
                         }
                         if (weight.boneIndex < 0 || weight.boneIndex >= boneCount)
                         {
                             throw new InvalidOperationException(
                                 $"Skinned mesh '{mesh.name}' has bone index {weight.boneIndex} outside 0..{boneCount - 1}.");
                         }
+                        if (weight.weight < 0f)
+                        {
+                            degenerateVertices++;
+                        }
                         totalWeight += weight.weight;
                     }
-                    if (!IsFinite(totalWeight) || totalWeight <= 0f)
+
+                    // A vertex with no positive influence collapses in Unity too. The bake
+                    // reproduces whatever Unity shows, so this is reported rather than fatal.
+                    if (totalWeight <= 0f)
                     {
-                        throw new InvalidOperationException(
-                            $"Skinned mesh '{mesh.name}' has no positive bone weight at vertex {vertexIndex}.");
+                        degenerateVertices++;
                     }
                 }
 
@@ -1144,6 +1312,12 @@ namespace ccd775.AvatarFbxExporter
                 {
                     throw new InvalidOperationException(
                         $"Skinned mesh '{mesh.name}' has extra entries in its bone-weight array.");
+                }
+                if (degenerateVertices > 0)
+                {
+                    Warn(
+                        $"Skinned mesh '{mesh.name}' has {degenerateVertices} vertices with negative or " +
+                        "zero total bone weight. They are exported exactly as Unity displays them.");
                 }
             }
         }
@@ -1214,6 +1388,7 @@ namespace ccd775.AvatarFbxExporter
 
             var destinationCounts = new byte[source.vertexCount];
             var destinationWeights = new List<BoneWeight1>();
+            var unweightedVertices = 0;
             using (var sourceCounts = source.GetBonesPerVertex())
             using (var sourceWeights = source.GetAllBoneWeights())
             {
@@ -1242,6 +1417,15 @@ namespace ccd775.AvatarFbxExporter
                         destinationCount++;
                     }
 
+                    // The rebuilt bind pose equals the current pose, so pinning an unweighted
+                    // vertex to any bone leaves it exactly where the bake put it. Without this the
+                    // mesh would carry a zero-influence vertex that FBX cannot express.
+                    if (destinationCount == 0)
+                    {
+                        destinationWeights.Add(new BoneWeight1 { boneIndex = 0, weight = 1f });
+                        destinationCount = 1;
+                        unweightedVertices++;
+                    }
                     if (destinationCount > byte.MaxValue)
                     {
                         throw new InvalidOperationException(
@@ -1249,6 +1433,13 @@ namespace ccd775.AvatarFbxExporter
                     }
                     destinationCounts[vertexIndex] = (byte)destinationCount;
                 }
+            }
+
+            if (unweightedVertices > 0)
+            {
+                Warn(
+                    $"Skinned mesh '{source.name}' has {unweightedVertices} vertices with no usable bone " +
+                    "influence. They were pinned to their baked rest position.");
             }
 
             using (var counts = new NativeArray<byte>(destinationCounts, Allocator.Temp))
@@ -1275,62 +1466,17 @@ namespace ccd775.AvatarFbxExporter
             }
         }
 
-        private static float CalculateBlendShapeReconstructionError(
-            Mesh expected,
-            Mesh bakedMesh,
-            IReadOnlyList<float> weights)
-        {
-            if (expected.vertexCount != bakedMesh.vertexCount || bakedMesh.blendShapeCount != weights.Count)
-            {
-                return float.PositiveInfinity;
-            }
-
-            var expectedVertices = expected.vertices;
-            var reconstructed = bakedMesh.vertices;
-            var deltas = new Vector3[bakedMesh.vertexCount];
-            var deltaNormals = new Vector3[bakedMesh.vertexCount];
-            var deltaTangents = new Vector3[bakedMesh.vertexCount];
-
-            for (var shapeIndex = 0; shapeIndex < bakedMesh.blendShapeCount; shapeIndex++)
-            {
-                var frameCount = bakedMesh.GetBlendShapeFrameCount(shapeIndex);
-                if (frameCount == 0 || Mathf.Abs(weights[shapeIndex]) <= 0.000001f)
-                {
-                    continue;
-                }
-
-                var frameIndex = frameCount - 1;
-                var frameWeight = bakedMesh.GetBlendShapeFrameWeight(shapeIndex, frameIndex);
-                if (Mathf.Abs(frameWeight) <= 0.000001f)
-                {
-                    continue;
-                }
-
-                bakedMesh.GetBlendShapeFrameVertices(
-                    shapeIndex,
-                    frameIndex,
-                    deltas,
-                    deltaNormals,
-                    deltaTangents);
-                var multiplier = weights[shapeIndex] / frameWeight;
-                for (var vertexIndex = 0; vertexIndex < reconstructed.Length; vertexIndex++)
-                {
-                    reconstructed[vertexIndex] += deltas[vertexIndex] * multiplier;
-                }
-            }
-
-            var maxError = 0f;
-            for (var index = 0; index < expectedVertices.Length; index++)
-            {
-                maxError = Mathf.Max(maxError, Vector3.Distance(expectedVertices[index], reconstructed[index]));
-            }
-            return maxError;
-        }
-
-        private static float ValidateUnifiedBindPoses(GameObject root)
+        /// <summary>
+        /// Returns the largest disagreement between renderers about where a shared bone rests.
+        /// The rotation block is unitless while the translation column scales with the avatar, so
+        /// <paramref name="referenceLength"/> reports the scale the caller should judge it against.
+        /// </summary>
+        private static float ValidateUnifiedBindPoses(GameObject root, out float referenceLength)
         {
             var inferredMatrices = new Dictionary<Transform, Matrix4x4>();
-            var maxError = 0f;
+            var maxLinearError = 0f;
+            var maxTranslationError = 0f;
+            var maxTranslation = 1f;
 
             foreach (var renderer in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
             {
@@ -1341,9 +1487,16 @@ namespace ccd775.AvatarFbxExporter
                     var inferred = root.transform.worldToLocalMatrix *
                                    renderer.transform.localToWorldMatrix *
                                    bindPoses[index].inverse;
+                    var translation = inferred.GetColumn(3);
+                    maxTranslation = Mathf.Max(
+                        maxTranslation,
+                        Mathf.Max(Mathf.Abs(translation.x), Mathf.Max(Mathf.Abs(translation.y), Mathf.Abs(translation.z))));
+
                     if (inferredMatrices.TryGetValue(bone, out var previous))
                     {
-                        maxError = Mathf.Max(maxError, MatrixDifference(previous, inferred));
+                        MatrixDifference(previous, inferred, out var linear, out var translationError);
+                        maxLinearError = Mathf.Max(maxLinearError, linear);
+                        maxTranslationError = Mathf.Max(maxTranslationError, translationError);
                     }
                     else
                     {
@@ -1352,17 +1505,35 @@ namespace ccd775.AvatarFbxExporter
                 }
             }
 
-            return maxError;
+            referenceLength = maxTranslation;
+            // Both halves are expressed in the same units before they are combined: the rotation
+            // block is scaled up to the avatar size so one budget covers the whole matrix.
+            return Mathf.Max(maxLinearError * maxTranslation, maxTranslationError);
         }
 
-        private static float MatrixDifference(Matrix4x4 left, Matrix4x4 right)
+        private static void MatrixDifference(
+            Matrix4x4 left,
+            Matrix4x4 right,
+            out float maxLinearDifference,
+            out float maxTranslationDifference)
         {
-            var max = 0f;
-            for (var index = 0; index < 16; index++)
+            maxLinearDifference = 0f;
+            maxTranslationDifference = 0f;
+            for (var column = 0; column < 4; column++)
             {
-                max = Mathf.Max(max, Mathf.Abs(left[index] - right[index]));
+                for (var row = 0; row < 4; row++)
+                {
+                    var difference = Mathf.Abs(left[row, column] - right[row, column]);
+                    if (column == 3 && row < 3)
+                    {
+                        maxTranslationDifference = Mathf.Max(maxTranslationDifference, difference);
+                    }
+                    else
+                    {
+                        maxLinearDifference = Mathf.Max(maxLinearDifference, difference);
+                    }
+                }
             }
-            return max;
         }
 
         private static void RemoveAnimationDrivers(GameObject root)
@@ -1476,10 +1647,20 @@ namespace ccd775.AvatarFbxExporter
                         var matchedChannels = 0;
                         ApplyBlendShapeWeights(scene.GetRootNode(), setsByNode, ref matchedChannels);
                         var expectedChannels = weightSets.Sum(set => set.Weights.Count);
-                        if (matchedChannels != expectedChannels)
+                        if (matchedChannels < expectedChannels)
                         {
-                            throw new InvalidOperationException(
-                                $"FBX BlendShape channel mismatch. Expected {expectedChannels}, matched {matchedChannels}.");
+                            // Unmatched channels keep whatever weight Unity's exporter wrote, which
+                            // is a wrong default value rather than broken geometry.
+                            if (matchedChannels == 0 && expectedChannels > 0)
+                            {
+                                throw new InvalidOperationException(
+                                    $"None of the {expectedChannels} BlendShape channels could be located in the " +
+                                    "FBX, so no current weight could be restored.");
+                            }
+                            Warn(
+                                $"{expectedChannels - matchedChannels} of {expectedChannels} BlendShape channels " +
+                                "could not be located in the FBX; their current weights were left at the " +
+                                "value Unity's FBX exporter wrote.");
                         }
 
                         ApplyMaterialProperties(scene, materialSets);
@@ -1576,14 +1757,16 @@ namespace ccd775.AvatarFbxExporter
                 var node = rootNode.FindChild(rendererSet.NodeName, true);
                 if (node == null)
                 {
-                    throw new InvalidOperationException(
-                        $"FBX mesh node '{rendererSet.NodeName}' was not found while embedding textures.");
+                    Warn(
+                        $"FBX mesh node '{rendererSet.NodeName}' was not found while embedding textures; " +
+                        "its textures were skipped.");
+                    continue;
                 }
                 if (node.GetMaterialCount() < rendererSet.Materials.Count)
                 {
-                    throw new InvalidOperationException(
-                        $"FBX node '{rendererSet.NodeName}' has {node.GetMaterialCount()} materials, " +
-                        $"but Unity has {rendererSet.Materials.Count} material slots.");
+                    Warn(
+                        $"FBX node '{rendererSet.NodeName}' has {node.GetMaterialCount()} materials but Unity " +
+                        $"has {rendererSet.Materials.Count} slots; the extra slots were skipped.");
                 }
 
                 for (var materialIndex = 0; materialIndex < rendererSet.Materials.Count; materialIndex++)
@@ -1594,11 +1777,13 @@ namespace ccd775.AvatarFbxExporter
                         continue;
                     }
 
-                    var fbxMaterial = node.GetMaterial(materialIndex);
+                    var fbxMaterial = materialIndex < node.GetMaterialCount()
+                        ? node.GetMaterial(materialIndex)
+                        : null;
                     if (fbxMaterial == null)
                     {
-                        throw new InvalidOperationException(
-                            $"FBX material slot {materialIndex} on '{rendererSet.NodeName}' is empty.");
+                        Warn($"FBX material slot {materialIndex} on '{rendererSet.NodeName}' is empty; skipped.");
+                        continue;
                     }
 
                     SetMaterialMetadata(fbxMaterial, "UnityMaterialName", materialSet.UnityMaterialName);
@@ -1610,6 +1795,10 @@ namespace ccd775.AvatarFbxExporter
                             binding,
                             textureCache,
                             ref textureIndex);
+                        if (texture == null)
+                        {
+                            continue;
+                        }
 
                         var customPropertyName = "UnityTexture_" + MakeCompatibleName(binding.UnityPropertyName);
                         var customProperty = GetOrCreateStringProperty(fbxMaterial, customPropertyName);
@@ -1617,9 +1806,10 @@ namespace ccd775.AvatarFbxExporter
                         customProperty.DisconnectAllSrcObject();
                         if (!texture.ConnectDstProperty(customProperty))
                         {
-                            throw new InvalidOperationException(
+                            Warn(
                                 $"Could not connect texture '{binding.UnityAssetPath}' to " +
-                                $"'{materialSet.UnityMaterialName}.{binding.UnityPropertyName}'.");
+                                $"'{materialSet.UnityMaterialName}.{binding.UnityPropertyName}'; skipped.");
+                            continue;
                         }
 
                         if (!string.IsNullOrEmpty(binding.StandardFbxPropertyName))
@@ -1640,12 +1830,16 @@ namespace ccd775.AvatarFbxExporter
                                     binding.StandardSourceFullPath,
                                     binding.StandardEmbeddedFileName,
                                     "Standard");
+                            if (standardTexture == null)
+                            {
+                                continue;
+                            }
                             standardProperty.DisconnectAllSrcObject();
                             if (!standardTexture.ConnectDstProperty(standardProperty))
                             {
-                                throw new InvalidOperationException(
+                                Warn(
                                     $"Could not connect '{binding.UnityPropertyName}' to FBX property " +
-                                    $"'{binding.StandardFbxPropertyName}'.");
+                                    $"'{binding.StandardFbxPropertyName}'; skipped.");
                             }
                         }
                     }
@@ -1682,7 +1876,8 @@ namespace ccd775.AvatarFbxExporter
             var texture = FbxFileTexture.Create(scene, textureName);
             if (!texture.SetFileName(sourceFullPath))
             {
-                throw new InvalidOperationException($"FBX rejected texture path '{sourceFullPath}'.");
+                Warn($"FBX rejected texture path '{sourceFullPath}'; the binding was skipped.");
+                return null;
             }
             texture.SetRelativeFileName(embeddedFileName);
             texture.SetTextureUse(FbxTexture.ETextureUse.eStandard);

@@ -14,7 +14,10 @@ namespace ccd775.AvatarFbxExporter
             public Quaternion Rotation;
         }
 
-        private static int StandardizeSkeletonScales(GameObject root, out float maxMeshError)
+        private static int StandardizeSkeletonScales(
+            GameObject root,
+            out float maxMeshError,
+            out float referenceLength)
         {
             var renderers = root.GetComponentsInChildren<SkinnedMeshRenderer>(true)
                 .Where(renderer => renderer.sharedMesh != null)
@@ -26,6 +29,7 @@ namespace ccd775.AvatarFbxExporter
                 .ToArray();
 
             var referenceVertices = new Dictionary<SkinnedMeshRenderer, Vector3[]>(renderers.Length);
+            referenceLength = 1f;
             foreach (var renderer in renderers)
             {
                 var referenceMesh = new Mesh();
@@ -33,6 +37,7 @@ namespace ccd775.AvatarFbxExporter
                 {
                     renderer.BakeMesh(referenceMesh, false);
                     ValidateFiniteMesh(referenceMesh, renderer, "pre-normalization skeleton pose");
+                    referenceLength = Mathf.Max(referenceLength, GetBoundsDiagonal(referenceMesh.bounds.size));
                     referenceVertices.Add(renderer, referenceMesh.vertices);
                 }
                 finally

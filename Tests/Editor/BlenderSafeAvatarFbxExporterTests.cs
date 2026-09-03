@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -78,6 +79,68 @@ namespace ccd775.AvatarFbxExporter.Tests
                 Assert.That(Directory.GetFiles(
                     fixture.OutputDirectory,
                     ".SyntheticAvatar.fbx.*.backup"), Is.Empty);
+            }
+        }
+
+        [Test]
+        public void ExportSeparatesRendererThatHasChildObjects()
+        {
+            using (var fixture = new SyntheticAvatarFixture())
+            {
+                var attachment = new GameObject("Attachment") { hideFlags = HideFlags.HideAndDontSave };
+                attachment.transform.SetParent(fixture.Renderer.transform, false);
+
+                var result = BlenderSafeAvatarFbxExporter.Export(
+                    fixture.Root,
+                    fixture.OutputPath,
+                    false,
+                    false);
+
+                Assert.That(result.SeparatedBoneRendererCount, Is.GreaterThanOrEqualTo(1));
+                Assert.That(result.SkinnedRendererCount, Is.EqualTo(1));
+                Assert.That(IsBinaryFbx(fixture.OutputPath), Is.True);
+                Assert.That(fixture.Renderer.transform.childCount, Is.EqualTo(1));
+            }
+        }
+
+        [Test]
+        public void ExportFlattensInBetweenBlendShapeAndRescalesItsWeight()
+        {
+            using (var fixture = new SyntheticAvatarFixture(includeInBetweenShape: true))
+            {
+                var result = BlenderSafeAvatarFbxExporter.Export(
+                    fixture.Root,
+                    fixture.OutputPath,
+                    false,
+                    false);
+
+                Assert.That(result.FlattenedBlendShapeChannelCount, Is.EqualTo(1));
+                Assert.That(result.Warnings.Count, Is.GreaterThanOrEqualTo(1));
+                Assert.That(IsBinaryFbx(fixture.OutputPath), Is.True);
+
+                // The channel is stored against a 100-weight target, so the Unity weight of 50 on a
+                // 50-weight last frame becomes a full-strength DeformPercent.
+                var weights = ReadBlendShapeWeights(fixture.OutputPath);
+                Assert.That(weights.ContainsKey("InBetweenShape"), Is.True);
+                Assert.That(weights["InBetweenShape"], Is.EqualTo(100f).Within(0.001f));
+                Assert.That(weights["ManualShape"], Is.EqualTo(35f).Within(0.001f));
+            }
+        }
+
+        [Test]
+        public void ExportReportsPoseBakeDeviationInsteadOfFailingOnASoundAvatar()
+        {
+            using (var fixture = new SyntheticAvatarFixture())
+            {
+                var result = BlenderSafeAvatarFbxExporter.Export(
+                    fixture.Root,
+                    fixture.OutputPath,
+                    new BlenderSafeFbxExportOptions { EmbedAllMaterialTextures = false });
+
+                Assert.That(result.ValidationLevel, Is.EqualTo(BlenderSafeFbxValidationLevel.Balanced));
+                Assert.That(result.MaxPoseBakeErrorRatio, Is.LessThan(0.0001f));
+                Assert.That(result.Renderers[0].PoseBakeWorstVertexIndex, Is.GreaterThanOrEqualTo(-1));
+                Assert.That(IsBinaryFbx(fixture.OutputPath), Is.True);
             }
         }
 
@@ -176,6 +239,57 @@ namespace ccd775.AvatarFbxExporter.Tests
             }
         }
 
+        private static Dictionary<string, float> ReadBlendShapeWeights(string path)
+        {
+            var weights = new Dictionary<string, float>(StringComparer.Ordinal);
+            var manager = FbxManager.Create();
+            var ioSettings = FbxIOSettings.Create(manager, Globals.IOSROOT);
+            manager.SetIOSettings(ioSettings);
+            try
+            {
+                var scene = FbxScene.Create(manager, "TestWeights");
+                try
+                {
+                    using (var importer = FbxImporter.Create(manager, "TestWeightImporter"))
+                    {
+                        Assert.That(importer.Initialize(path, -1, manager.GetIOSettings()), Is.True);
+                        Assert.That(importer.Import(scene), Is.True);
+                    }
+
+                    Visit(scene.GetRootNode(), node =>
+                    {
+                        var mesh = node.GetMesh();
+                        if (mesh == null)
+                        {
+                            return;
+                        }
+                        for (var sourceIndex = 0; sourceIndex < mesh.GetSrcObjectCount(); sourceIndex++)
+                        {
+                            var source = mesh.GetSrcObject(sourceIndex);
+                            for (var childIndex = 0; childIndex < source.GetSrcObjectCount(); childIndex++)
+                            {
+                                var child = source.GetSrcObject(childIndex);
+                                var property = child.FindProperty("DeformPercent");
+                                if (property != null && property.IsValid())
+                                {
+                                    weights[child.GetName()] = property.GetFloat();
+                                }
+                            }
+                        }
+                    });
+                }
+                finally
+                {
+                    scene.Destroy();
+                }
+            }
+            finally
+            {
+                manager.Destroy();
+            }
+            return weights;
+        }
+
         private static void Visit(FbxNode node, Action<FbxNode> visitor)
         {
             if (node == null)
@@ -202,7 +316,7 @@ namespace ccd775.AvatarFbxExporter.Tests
             private readonly Texture2D texture;
             private string generatedAssetFolder;
 
-            public SyntheticAvatarFixture()
+            public SyntheticAvatarFixture(bool includeInBetweenShape = false)
             {
                 OutputDirectory = Path.Combine(
                     Path.GetTempPath(),
@@ -248,6 +362,23 @@ namespace ccd775.AvatarFbxExporter.Tests
                     },
                     new Vector3[4],
                     new Vector3[4]);
+                if (includeInBetweenShape)
+                {
+                    // Two frames whose full weight is 50 rather than 100, so the export has to both
+                    // flatten the channel and rescale its recorded weight.
+                    mesh.AddBlendShapeFrame(
+                        "InBetweenShape",
+                        25f,
+                        new[] { Vector3.zero, Vector3.zero, new Vector3(0.01f, 0f, 0f), new Vector3(0.01f, 0f, 0f) },
+                        new Vector3[4],
+                        new Vector3[4]);
+                    mesh.AddBlendShapeFrame(
+                        "InBetweenShape",
+                        50f,
+                        new[] { Vector3.zero, Vector3.zero, new Vector3(0.04f, 0f, 0f), new Vector3(0.04f, 0f, 0f) },
+                        new Vector3[4],
+                        new Vector3[4]);
+                }
                 mesh.RecalculateBounds();
 
                 texture = new Texture2D(2, 2, TextureFormat.RGBA32, false, false)
@@ -270,6 +401,10 @@ namespace ccd775.AvatarFbxExporter.Tests
                 Renderer.rootBone = Bone;
                 Renderer.sharedMaterial = material;
                 Renderer.SetBlendShapeWeight(0, 35f);
+                if (includeInBetweenShape)
+                {
+                    Renderer.SetBlendShapeWeight(1, 50f);
+                }
                 Bone.localRotation = Quaternion.Euler(0f, 20f, 0f);
             }
 

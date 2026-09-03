@@ -14,6 +14,7 @@ namespace ccd775.AvatarFbxExporter
             try
             {
                 CollectBindPoseGlobals(scene, bindGlobals);
+                var referenceLength = GetBindPoseReferenceLength(bindGlobals.Values);
                 var zero = new FbxVector4(0.0, 0.0, 0.0);
 
                 foreach (var pair in bindGlobals.OrderBy(item => GetFbxNodeDepth(item.Key)))
@@ -81,10 +82,20 @@ namespace ccd775.AvatarFbxExporter
                             var minScale = Math.Min(
                                 Math.Abs(scale.X),
                                 Math.Min(Math.Abs(scale.Y), Math.Abs(scale.Z)));
-                            if (maxShear > FbxShearTolerance)
+                            if (maxShear > FbxShearFailTolerance ||
+                                (maxShear > FbxShearWarnTolerance &&
+                                 ActiveValidationLevel == BlenderSafeFbxValidationLevel.Strict))
                             {
                                 throw new InvalidOperationException(
-                                    $"FBX bone '{node.GetName()}' has non-TRS shear {maxShear:E6}.");
+                                    $"FBX bone '{node.GetName()}' has non-TRS shear {maxShear:E6}. " +
+                                    "Blender stores one TRS rest matrix per bone, so a sheared rest " +
+                                    "pose cannot be represented.");
+                            }
+                            if (maxShear > FbxShearWarnTolerance)
+                            {
+                                Warn(
+                                    $"FBX bone '{node.GetName()}' has a residual shear of {maxShear:E6}. " +
+                                    "It was dropped when the bone was written as a TRS rest pose.");
                             }
                             if (sign <= 0.0 || minScale <= 0.0000000001)
                             {
@@ -94,13 +105,14 @@ namespace ccd775.AvatarFbxExporter
 
                             using (var reconstructed = new FbxMatrix(translation, rotation, scale))
                             {
-                                var reconstructionError = FbxMatrixDifference(localBind, reconstructed);
-                                if (reconstructionError > FbxMatrixErrorTolerance)
-                                {
-                                    throw new InvalidOperationException(
-                                        $"FBX bone '{node.GetName()}' cannot be represented as a pure TRS. " +
-                                        $"Matrix error: {reconstructionError:E6}.");
-                                }
+                                var reconstructionError = FbxMatrixDifference(
+                                    localBind,
+                                    reconstructed,
+                                    referenceLength);
+                                ReportFbxMatrixDeviation(
+                                    reconstructionError,
+                                    $"FBX bone '{node.GetName()}' does not decompose into a pure TRS.",
+                                    "Blender receives the closest TRS rest pose for this bone.");
                             }
 
                             FbxVector4 euler;
@@ -239,14 +251,15 @@ namespace ccd775.AvatarFbxExporter
                     var matrix = new FbxMatrix(pose.GetMatrix(entryIndex));
                     if (bindGlobals.TryGetValue(node, out var previous))
                     {
-                        var error = FbxMatrixDifference(previous, matrix);
+                        var error = FbxMatrixDifference(
+                            previous,
+                            matrix,
+                            GetBindPoseReferenceLength(new[] { previous }));
                         matrix.Dispose();
-                        if (error > FbxMatrixErrorTolerance)
-                        {
-                            throw new InvalidOperationException(
-                                $"FBX bind poses disagree for bone '{node.GetName()}'. " +
-                                $"Matrix error: {error:E6}.");
-                        }
+                        ReportFbxMatrixDeviation(
+                            error,
+                            $"FBX bind poses disagree for bone '{node.GetName()}'.",
+                            "The first bind pose encountered for this bone was kept.");
                     }
                     else
                     {
@@ -263,6 +276,7 @@ namespace ccd775.AvatarFbxExporter
 
         private static void ValidateFbxBoneDefaults(IReadOnlyDictionary<FbxNode, FbxMatrix> bindGlobals)
         {
+            var referenceLength = GetBindPoseReferenceLength(bindGlobals.Values);
             using (var time = FbxTime.FromSecondDouble(0.0))
             {
                 foreach (var pair in bindGlobals)
@@ -272,41 +286,90 @@ namespace ccd775.AvatarFbxExporter
                         FbxNode.EPivotSet.eSourcePivot,
                         false,
                         true);
-                    var error = FbxMatrixDifference(actual, pair.Value);
-                    if (error > FbxMatrixErrorTolerance)
+                    var error = FbxMatrixDifference(actual, pair.Value, referenceLength);
+                    ReportFbxMatrixDeviation(
+                        error,
+                        $"FBX bone '{pair.Key.GetName()}' rests away from its bind pose.",
+                        "Blender imports the bone at its stored rest transform.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Largest element-wise difference, expressed dimensionlessly: the translation row is
+        /// divided by <paramref name="referenceLength"/> so an avatar authored in centimetres is
+        /// judged by the same budget as one authored in metres.
+        /// </summary>
+        private static double FbxMatrixDifference(FbxMatrix left, FbxMatrix right, double referenceLength = 1.0)
+        {
+            var max = 0.0;
+            var scale = referenceLength > 0.000001 ? referenceLength : 1.0;
+            for (var row = 0; row < 4; row++)
+            {
+                for (var column = 0; column < 4; column++)
+                {
+                    var difference = Math.Abs(left.Get(row, column) - right.Get(row, column));
+                    if (row == 3 && column < 3)
                     {
-                        throw new InvalidOperationException(
-                            $"FBX bone '{pair.Key.GetName()}' default pose differs from its bind pose. " +
-                            $"Matrix error: {error:E6}.");
+                        difference /= scale;
                     }
-                }
-            }
-        }
-
-        private static double FbxMatrixDifference(FbxMatrix left, FbxMatrix right)
-        {
-            var max = 0.0;
-            for (var row = 0; row < 4; row++)
-            {
-                for (var column = 0; column < 4; column++)
-                {
-                    max = Math.Max(max, Math.Abs(left.Get(row, column) - right.Get(row, column)));
+                    max = Math.Max(max, difference);
                 }
             }
             return max;
         }
 
-        private static double FbxMatrixDifference(FbxAMatrix left, FbxMatrix right)
+        private static double FbxMatrixDifference(FbxAMatrix left, FbxMatrix right, double referenceLength = 1.0)
         {
             var max = 0.0;
+            var scale = referenceLength > 0.000001 ? referenceLength : 1.0;
             for (var row = 0; row < 4; row++)
             {
                 for (var column = 0; column < 4; column++)
                 {
-                    max = Math.Max(max, Math.Abs(left.Get(row, column) - right.Get(row, column)));
+                    var difference = Math.Abs(left.Get(row, column) - right.Get(row, column));
+                    if (row == 3 && column < 3)
+                    {
+                        difference /= scale;
+                    }
+                    max = Math.Max(max, difference);
                 }
             }
             return max;
+        }
+
+        /// <summary>Largest absolute translation component across a set of bind-pose matrices.</summary>
+        private static double GetBindPoseReferenceLength(IEnumerable<FbxMatrix> matrices)
+        {
+            var max = 1.0;
+            foreach (var matrix in matrices)
+            {
+                for (var column = 0; column < 3; column++)
+                {
+                    max = Math.Max(max, Math.Abs(matrix.Get(3, column)));
+                }
+            }
+            return max;
+        }
+
+        /// <summary>
+        /// Applies the two-tier bind-pose budget: a deviation a clean scene never reaches is
+        /// reported, and only a geometrically meaningful one aborts.
+        /// </summary>
+        private static void ReportFbxMatrixDeviation(double error, string subject, string consequence)
+        {
+            if (error <= FbxMatrixWarnTolerance)
+            {
+                return;
+            }
+            if (error <= FbxMatrixFailTolerance &&
+                ActiveValidationLevel != BlenderSafeFbxValidationLevel.Strict)
+            {
+                Warn(subject + " Relative matrix error: " + error.ToString("E6") + ". " + consequence);
+                return;
+            }
+            throw new InvalidOperationException(
+                subject + " Relative matrix error: " + error.ToString("E6") + ". " + consequence);
         }
 
         private static int GetFbxNodeDepth(FbxNode node)
