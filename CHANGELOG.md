@@ -6,7 +6,9 @@ All notable changes to this project are documented in this file.
 
 ## [0.2.1] - 2026-09-04
 
-Packaging fix. The exporter itself is unchanged from 0.2.0.
+Packaging fix. The exporter itself is unchanged from 0.2.0, and because the 0.2.0
+release has been withdrawn, this is the first installable release carrying the
+0.2.0 changes.
 
 ### Fixed
 
@@ -18,7 +20,11 @@ Packaging fix. The exporter itself is unchanged from 0.2.0.
   completed and installed nothing. The release package is now exported by Unity
   itself and verified by importing it into a clean project.
 
-## [0.2.0] - 2026-09-03
+## [0.2.0] - 2026-09-03 [WITHDRAWN]
+
+Withdrawn: the published `.unitypackage` could not be imported, and the GitHub
+release was removed. The `v0.2.0` tag remains. Everything below shipped in
+[0.2.1](#021---2026-09-04).
 
 This release reworks validation. Every check that used to abort an export over a
 deviation far below what anyone can see now measures the same number, reports it,
