@@ -12,7 +12,9 @@
 - [ ] Source Scene/Prefab dirty state is unchanged after export.
 - [ ] Existing-output refusal and explicit transactional overwrite both pass.
 - [ ] Output contains no private avatar assets, absolute staging paths, or unexpected external texture dependencies.
-- [ ] Release `.unitypackage` imports into a clean Unity 2022.3 LTS project after FBX Exporter 4.2.1 is installed.
+- [ ] Release `.unitypackage` was produced by Unity's own **Assets > Export Package**, not by a third-party archiver. Unity's reader rejects archives that look valid to `tar`: it needs one directory entry per asset GUID, no PAX extended headers, and the gzip stream's stored file name to be `archtemp.tar`.
+- [ ] Release `.unitypackage` imports into a clean Unity 2022.3 LTS project after FBX Exporter 4.2.1 is installed, and the imported file count matches the package's asset count. A failed import reports success and installs nothing, so counting files is the only reliable check.
+- [ ] Release `.unitypackage` asset GUIDs match the previous release for every file carried over, so an existing install upgrades in place instead of duplicating.
 - [ ] Release `.unitypackage` contains only the tool, its documentation, and license notices; external dependencies are not bundled.
 - [ ] Repository contains no `.unity`, `.prefab`, `.fbx`, `.blend`, `.vrm`, or `.unitypackage` fixture/artifact files.
 - [ ] Third-party notices remain accurate.

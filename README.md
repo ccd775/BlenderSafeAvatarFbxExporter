@@ -1,6 +1,6 @@
 # Blender-Safe VRChat Avatar FBX Exporter
 
-![将 Unity 中 Modular Avatar Manual Bake 后的 VRChat 角色导出为 FBX 并在 Blender 中打开](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.2.0/Documentation~/images/blender-safe-export-overview.png)
+![将 Unity 中 Modular Avatar Manual Bake 后的 VRChat 角色导出为 FBX 并在 Blender 中打开](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.2.1/Documentation~/images/blender-safe-export-overview.png)
 
 [![Source validation](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml/badge.svg)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml)
 [![Latest release](https://img.shields.io/github/v/release/ccd775/BlenderSafeAvatarFbxExporter?label=Release)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/latest)
@@ -63,7 +63,7 @@ Modular Avatar、NDMF、VRChat SDK 和 lilToon **不是编译依赖**。Modular 
 
 1. 使用 Unity **2022.3 LTS** 打开目标项目。
 2. 在 **Window > Package Manager** 中，从 Unity Registry 安装 **FBX Exporter 4.2.1**。
-3. 从 [v0.2.0 Release](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/tag/v0.2.0) 下载 [`BlenderSafeAvatarFbxExporter-v0.2.0.unitypackage`](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/download/v0.2.0/BlenderSafeAvatarFbxExporter-v0.2.0.unitypackage)。
+3. 从 [v0.2.1 Release](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/tag/v0.2.1) 下载 [`BlenderSafeAvatarFbxExporter-v0.2.1.unitypackage`](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/download/v0.2.1/BlenderSafeAvatarFbxExporter-v0.2.1.unitypackage)。
 4. 双击该文件，或在 Unity 中使用 **Assets > Import Package > Custom Package...**。
 5. 保持全部文件勾选并点击 **Import**，等待 Editor 程序集编译完成。
 
@@ -159,8 +159,8 @@ foreach (var warning in result.Warnings)
 
 更多细节参见：
 
-- [技术说明](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.0/Documentation~/technical-notes.md)
-- [验证记录](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.0/Documentation~/validation.md)
+- [技术说明](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.1/Documentation~/technical-notes.md)
+- [验证记录](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.1/Documentation~/validation.md)
 
 ## 测试
 

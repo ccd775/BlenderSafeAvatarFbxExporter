@@ -1,6 +1,6 @@
 # Blender-Safe VRChat Avatar FBX Exporter
 
-![A VRChat avatar exported from a Modular Avatar Manual Bake result in Unity and opened in Blender](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.2.0/Documentation~/images/blender-safe-export-overview.png)
+![A VRChat avatar exported from a Modular Avatar Manual Bake result in Unity and opened in Blender](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.2.1/Documentation~/images/blender-safe-export-overview.png)
 
 [![Source validation](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml/badge.svg)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/actions/workflows/source-validation.yml)
 [![Latest release](https://img.shields.io/github/v/release/ccd775/BlenderSafeAvatarFbxExporter?label=Release)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/latest)
@@ -63,7 +63,7 @@ Modular Avatar, NDMF, VRChat SDK, and lilToon are **not compile-time dependencie
 
 1. Open the target project with Unity **2022.3 LTS**.
 2. In **Window > Package Manager**, install **FBX Exporter 4.2.1** from the Unity Registry.
-3. Download [`BlenderSafeAvatarFbxExporter-v0.2.0.unitypackage`](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/download/v0.2.0/BlenderSafeAvatarFbxExporter-v0.2.0.unitypackage) from the [v0.2.0 release](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/tag/v0.2.0).
+3. Download [`BlenderSafeAvatarFbxExporter-v0.2.1.unitypackage`](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/download/v0.2.1/BlenderSafeAvatarFbxExporter-v0.2.1.unitypackage) from the [v0.2.1 release](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/tag/v0.2.1).
 4. Double-click the file, or choose **Assets > Import Package > Custom Package...** in Unity.
 5. Keep all files selected, click **Import**, and wait for the Editor assembly to compile.
 
@@ -161,7 +161,7 @@ The pose-bake number has a precise meaning: **the exported base geometry and Ble
 - Material conversion is approximate, not a shader conversion system.
 - Tested on Windows. macOS and Linux Editor behavior has not yet been certified.
 
-See [the technical notes](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.0/Documentation~/technical-notes.md) and [validation record](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.0/Documentation~/validation.md) for implementation rationale and verification details.
+See [the technical notes](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.1/Documentation~/technical-notes.md) and [validation record](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/blob/v0.2.1/Documentation~/validation.md) for implementation rationale and verification details.
 
 ## Tests
 

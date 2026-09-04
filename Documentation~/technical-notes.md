@@ -74,3 +74,13 @@ Both packages are verified against 4.2.1. A different version is accepted with a
 ## Source and output safety
 
 The selected object is instantiated beneath an inactive, hidden, non-saving container. All destructive operations affect only this clone. Output is written to an operating-system temporary directory, validated, copied to a pending file beside the destination, then atomically replaced. Existing output is backed up and restored if Unity import fails.
+
+## Release package format
+
+The release `.unitypackage` must be produced by Unity's own **Assets > Export Package**. The format is a gzipped tar holding one directory per asset GUID, each containing `pathname`, `asset.meta` and, for non-folder assets, `asset`. That description is complete enough to reproduce with a generic tar writer and still get a file Unity refuses, because its reader is stricter than the format:
+
+- Entries must not carry PAX extended headers. A writer that defaults to PAX — Python's `tarfile` does — prefixes every entry with a `././@PaxHeader` record, and the reader takes the first path segment of an entry as an asset GUID.
+- Every GUID must have its own directory entry. An archive containing only the files inside those directories enumerates as empty.
+- The gzip stream's stored original file name must be `archtemp.tar`, which is the name Unity's exporter writes and its importer looks for. Storing the package's own file name is enough on its own to make the import a no-op.
+
+None of these produce an error. Unity raises `importPackageCompleted`, the progress dialog closes, and nothing is installed. Verifying a release package therefore means importing it into a clean project and counting the files that arrive; a successful-looking import proves nothing.

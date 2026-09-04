@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-04
+
+Packaging fix. The exporter itself is unchanged from 0.2.0.
+
+### Fixed
+
+- The 0.2.0 release `.unitypackage` could not be imported. It was not produced by
+  Unity, and its archive was laid out in a way Unity's package reader does not
+  accept: entries carried PAX extended headers, the per-GUID directory entries
+  were missing, and the gzip stream recorded the package's own file name instead
+  of the `archtemp.tar` name Unity looks for. Unity reported the import as
+  completed and installed nothing. The release package is now exported by Unity
+  itself and verified by importing it into a clean project.
+
 ## [0.2.0] - 2026-09-03
 
 This release reworks validation. Every check that used to abort an export over a
