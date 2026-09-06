@@ -1,3 +1,4 @@
+如果你觉得内容有帮助，可以前往https://ifdian.net/a/ccd775 赞助我以获得贴贴！
 # Blender-Safe VRChat Avatar FBX Exporter
 
 ![将 Unity 中 Modular Avatar Manual Bake 后的 VRChat 角色导出为 FBX 并在 Blender 中打开](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.2.1/Documentation~/images/blender-safe-export-overview.png)
