@@ -1,4 +1,3 @@
-如果你觉得内容有帮助，可以前往https://ifdian.net/a/ccd775 赞助我以获得贴贴！
 # Blender-Safe VRChat Avatar FBX Exporter
 
 ![将 Unity 中 Modular Avatar Manual Bake 后的 VRChat 角色导出为 FBX 并在 Blender 中打开](https://raw.githubusercontent.com/ccd775/BlenderSafeAvatarFbxExporter/v0.2.1/Documentation~/images/blender-safe-export-overview.png)
@@ -7,7 +6,7 @@
 [![Latest release](https://img.shields.io/github/v/release/ccd775/BlenderSafeAvatarFbxExporter?label=Release)](https://github.com/ccd775/BlenderSafeAvatarFbxExporter/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.md)
 [![Unity 2022.3 LTS](https://img.shields.io/badge/Unity-2022.3%20LTS-black.svg)](https://unity.com/releases/editor/whats-new/2022.3.22)
-
+[![爱发电赞助](https://img.shields.io/badge/爱发电-赞助作者-946CE6)](https://ifdian.net/a/ccd775)
 [English README](README.en.md)
 
 这是一个面向 **VRChat 角色创作者**的 Unity Editor FBX 导出工具。它会把经由 **Modular Avatar Manual Bake** 合并后的 VRChat Avatar / Prefab 导出为 Blender 兼容 FBX，并保留用户在烘焙结果上手动调整的骨骼姿势、BlendShape、蒙皮权重与贴图。
